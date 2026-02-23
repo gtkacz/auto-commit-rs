@@ -33,8 +33,8 @@ pub struct AppConfig {
     pub gitmoji_format: String,
 }
 
-fn default_provider() -> String { "gemini".into() }
-fn default_model() -> String { "gemini-2.0-flash".into() }
+fn default_provider() -> String { "groq".into() }
+fn default_model() -> String { "llama-3.3-70b-versatile".into() }
 fn default_locale() -> String { "en".into() }
 fn default_true() -> bool { true }
 fn default_commit_template() -> String { "$msg".into() }
