@@ -96,7 +96,7 @@ pub fn interactive_config(global: bool) -> Result<()> {
         // Edit the field
         let new_value = match *suffix {
             "PROVIDER" => {
-                let choices = vec!["gemini", "openai", "anthropic", "(custom)"];
+                let choices = vec!["gemini", "openai", "anthropic", "groq", "(custom)"];
                 match Select::new("Provider:", choices).prompt() {
                     Ok("(custom)") => {
                         Text::new("Custom provider name:").prompt().ok()
@@ -144,6 +144,17 @@ pub fn interactive_config(global: bool) -> Result<()> {
 
         if let Some(val) = new_value {
             cfg.set_field(suffix, &val);
+
+            // When switching providers, auto-set the model to that provider's default
+            if *suffix == "PROVIDER" {
+                let default_model = crate::provider::default_model_for(&val);
+                cfg.set_field("MODEL", default_model);
+                if default_model.is_empty() {
+                    println!("  {} Model cleared (set it manually)", "note:".yellow().bold());
+                } else {
+                    println!("  {} Model set to {}", "note:".yellow().bold(), default_model.dimmed());
+                }
+            }
         }
     }
 

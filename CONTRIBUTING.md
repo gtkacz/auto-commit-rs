@@ -187,7 +187,7 @@ That's it — most OpenAI-compatible providers are just 5 lines.
    cargo build     # Verify it compiles
    ```
 
-4. **Commit** with a descriptive message following [Conventional Commits](https://www.conventionalcommits.org/):
+4. **Commit** with a descriptive message following [Conventional Commits](https://www.conventionalcommits.org/) or just use `cgen` ;) :
    ```
    feat(provider): add Mistral as default provider
    fix(config): handle missing .env gracefully
@@ -246,8 +246,6 @@ Open an [issue](https://github.com/gtkacz/rust-auto-commit/issues/new) with:
 - **What problem it solves** — describe the use case, not just the solution
 - **Proposed behavior** — how it would work from the user's perspective
 - **Alternatives considered** — other ways you thought about solving it
-
-We value simplicity. Features that keep cgen minimal and fast are more likely to be accepted than features that add complexity for niche use cases.
 
 ## License
 

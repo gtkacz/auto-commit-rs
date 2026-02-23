@@ -17,6 +17,7 @@ enum RequestFormat {
 struct ProviderDef {
     api_url: &'static str,
     api_headers: &'static str,
+    default_model: &'static str,
     format: RequestFormat,
     response_path: &'static str,
 }
@@ -27,23 +28,38 @@ fn get_provider(name: &str) -> Option<ProviderDef> {
         "gemini" => Some(ProviderDef {
             api_url: "https://generativelanguage.googleapis.com/v1beta/models/$ACR_MODEL:generateContent?key=$ACR_API_KEY",
             api_headers: "",
+            default_model: "gemini-2.0-flash",
             format: RequestFormat::Gemini,
             response_path: "candidates.0.content.parts.0.text",
         }),
         "openai" => Some(ProviderDef {
             api_url: "https://api.openai.com/v1/chat/completions",
             api_headers: "Authorization: Bearer $ACR_API_KEY",
+            default_model: "gpt-4o-mini",
             format: RequestFormat::OpenAiCompat,
             response_path: "choices.0.message.content",
         }),
         "anthropic" => Some(ProviderDef {
             api_url: "https://api.anthropic.com/v1/messages",
             api_headers: "x-api-key: $ACR_API_KEY, anthropic-version: 2023-06-01",
+            default_model: "claude-sonnet-4-20250514",
             format: RequestFormat::Anthropic,
             response_path: "content.0.text",
         }),
+        "groq" => Some(ProviderDef {
+            api_url: "https://api.groq.com/openai/v1/chat/completions",
+            api_headers: "Authorization: Bearer $ACR_API_KEY",
+            default_model: "llama-3.3-70b-versatile",
+            format: RequestFormat::OpenAiCompat,
+            response_path: "choices.0.message.content",
+        }),
         _ => None,
     }
+}
+
+/// Get the default model for a built-in provider, or empty string for unknown providers.
+pub fn default_model_for(provider: &str) -> &'static str {
+    get_provider(provider).map_or("", |p| p.default_model)
 }
 
 /// Call the LLM API and return the generated commit message

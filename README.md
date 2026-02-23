@@ -110,7 +110,7 @@ ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
 
 ## Providers
 
-Built-in providers: **Gemini** (default), **OpenAI**, **Anthropic**.
+Built-in providers: **Gemini** (default), **OpenAI**, **Anthropic**, **Groq**.
 
 For custom providers, set `ACR_PROVIDER` to any name and provide `ACR_API_URL`. Custom providers default to OpenAI-compatible request format.
 
