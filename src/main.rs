@@ -1,52 +1,51 @@
-use anyhow::Result;
-use clap::Parser;
-use log::error;
-use opencommit::cli::Cli;
-use opencommit::commands::{commit, config, githook, commitlint};
-use opencommit::migrations::run_migrations;
-use opencommit::utils::version::check_latest_version;
+mod cli;
+mod config;
+mod git;
+mod interpolation;
+mod prompt;
+mod provider;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    env_logger::init();
-    
-    // Parse command line arguments
-    let cli = Cli::parse();
-    
-    // Run migrations for config if needed
-    if let Err(e) = run_migrations().await {
-        error!("Failed to run migrations: {}", e);
-        return Err(e);
+use anyhow::{Context, Result};
+use colored::Colorize;
+
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("{} {:#}", "error:".red().bold(), e);
+        std::process::exit(1);
     }
-    
-    // Check if we're running the latest version
-    if let Err(e) = check_latest_version().await {
-        // Just log the error but continue
-        error!("Failed to check latest version: {}", e);
-    }
-    
-    // Execute the appropriate command
+}
+
+fn run() -> Result<()> {
+    let cli = cli::parse();
+
     match cli.command {
-        Some(cmd) => match cmd {
-            opencommit::cli::Commands::Config { action } => {
-                config::handle_config_command(action).await
-            }
-            opencommit::cli::Commands::Hook { action } => {
-                githook::handle_hook_command(action).await
-            }
-            opencommit::cli::Commands::Commitlint { action } => {
-                commitlint::handle_commitlint_command(action).await
-            }
-        },
+        Some(cli::Command::Config { global }) => {
+            cli::interactive_config(global)?;
+        }
         None => {
-            // Default command is commit
-            commit::execute_commit(
-                cli.extra_args, 
-                cli.context, 
-                false, 
-                cli.fgm, 
-                cli.yes
-            ).await
+            let cfg = config::AppConfig::load()?;
+
+            if cfg.api_key.is_empty() {
+                anyhow::bail!(
+                    "No API key configured. Run {} or set {}",
+                    "cgen config".yellow(),
+                    "ACR_API_KEY".yellow()
+                );
+            }
+
+            let diff = git::get_staged_diff()
+                .context("Failed to get staged diff")?;
+
+            let system_prompt = prompt::build_system_prompt(&cfg);
+            let message = provider::call_llm(&cfg, &system_prompt, &diff)
+                .context("LLM API call failed")?;
+
+            let final_msg = cfg.commit_template.replace("$msg", message.trim());
+
+            git::run_commit(&final_msg, &cli.extra_args)
+                .context("git commit failed")?;
         }
     }
+
+    Ok(())
 }
