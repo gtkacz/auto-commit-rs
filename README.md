@@ -2,17 +2,56 @@
 
 Minimal CLI tool that generates git commit messages via LLMs.
 
-Fast, lightweight (~3-5MB binary), cross-platform. No runtime dependencies.
+Fast, lightweight, cross-platform. No runtime dependencies — just a single binary.
+
+## Why Rust?
+
+Tools like [opencommit](https://github.com/di-sukharev/opencommit) do the same thing but require Node.js and weigh in at **~100MB** of `node_modules`. cgen is a single **~2MB** static binary. No runtimes, no interpreters, no package managers — download and run.
+
+| | cgen | opencommit |
+|---|---|---|
+| Install size | ~2 MB | ~100 MB |
+| Runtime deps | None | Node.js |
+| Startup time | Instant | ~300ms (Node cold start) |
+| Distribution | Single binary | npm install |
 
 ## Install
 
-**Download a binary** from [Releases](../../releases) — no Rust needed.
-
-Or with Cargo:
+### Linux / macOS (curl)
 
 ```sh
-cargo install --git https://github.com/YOUR_USER/auto-commit-rs
+curl -fsSL https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.sh | bash
 ```
+
+This detects your OS and architecture, downloads the latest release binary to `/usr/local/bin`, and makes it executable. Set `INSTALL_DIR` to change the target:
+
+```sh
+INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.sh | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.ps1 | iex
+```
+
+This downloads the latest release to `%LOCALAPPDATA%\cgen\` and adds it to your user PATH.
+
+### Cargo
+
+```sh
+cargo install --git https://github.com/gtkacz/rust-auto-commit
+```
+
+### Manual Download
+
+Grab a binary from the [Releases](https://github.com/gtkacz/rust-auto-commit/releases) page and place it somewhere in your PATH.
+
+Available binaries:
+- `cgen-linux-amd64` — Linux x86_64
+- `cgen-macos-amd64` — macOS Intel
+- `cgen-macos-arm64` — macOS Apple Silicon
+- `cgen-windows-amd64.exe` — Windows x86_64
 
 ## Quick Start
 
@@ -34,6 +73,8 @@ cgen --no-verify        # Forward flags to git commit
 cgen config             # Interactive config editor (local .env)
 cgen config --global    # Interactive config editor (global TOML)
 ```
+
+Any arguments passed to `cgen` (without a subcommand) are forwarded directly to `git commit`.
 
 ## Configuration
 
@@ -79,6 +120,12 @@ export ACR_API_URL=http://localhost:11434/v1/chat/completions
 export ACR_MODEL=llama3
 ```
 
+## Contributing
+
+Contributions are welcome! Whether it's a new provider (often just 5 lines), a bug fix, or a documentation improvement — every bit helps.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, including how to set up the development environment and how to add a new default provider step-by-step.
+
 ## License
 
-MIT
+[MIT](LICENSE)
