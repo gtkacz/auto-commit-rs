@@ -56,7 +56,7 @@ pub fn parse() -> Cli {
 }
 
 pub fn interactive_config(global: bool) -> Result<()> {
-    let mut cfg = AppConfig::load().unwrap_or_default();
+    let mut cfg = AppConfig::load()?;
     let scope = if global { "global" } else { "local" };
 
     println!("\n{}  {} configuration\n", "cgen".cyan().bold(), scope);
@@ -193,12 +193,15 @@ pub fn interactive_config(global: bool) -> Result<()> {
         };
 
         if let Some(val) = new_value {
-            cfg.set_field(suffix, &val);
+            if let Err(err) = cfg.set_field(suffix, &val) {
+                println!("  {} {}", "error:".red().bold(), err);
+                continue;
+            }
 
             // When switching providers, auto-set the model to that provider's default
             if *suffix == "PROVIDER" {
                 let default_model = crate::provider::default_model_for(&val);
-                cfg.set_field("MODEL", default_model);
+                cfg.set_field("MODEL", default_model)?;
                 if default_model.is_empty() {
                     println!(
                         "  {} Model cleared (set it manually)",

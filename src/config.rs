@@ -152,6 +152,7 @@ impl AppConfig {
             }
         }
         cfg.apply_env_map(&env_map);
+        cfg.ensure_valid_locale()?;
 
         Ok(cfg)
     }
@@ -434,14 +435,18 @@ impl AppConfig {
     }
 
     /// Set a field by its env suffix
-    pub fn set_field(&mut self, suffix: &str, value: &str) {
+    pub fn set_field(&mut self, suffix: &str, value: &str) -> Result<()> {
         match suffix {
             "PROVIDER" => self.provider = value.into(),
             "MODEL" => self.model = value.into(),
             "API_KEY" => self.api_key = value.into(),
             "API_URL" => self.api_url = value.into(),
             "API_HEADERS" => self.api_headers = value.into(),
-            "LOCALE" => self.locale = value.into(),
+            "LOCALE" => {
+                let locale = normalize_locale(value);
+                validate_locale(&locale)?;
+                self.locale = locale;
+            }
             "ONE_LINER" => self.one_liner = value == "1" || value.eq_ignore_ascii_case("true"),
             "COMMIT_TEMPLATE" => self.commit_template = value.into(),
             "LLM_SYSTEM_PROMPT" => self.llm_system_prompt = value.into(),
@@ -466,11 +471,23 @@ impl AppConfig {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    fn ensure_valid_locale(&mut self) -> Result<()> {
+        self.locale = normalize_locale(&self.locale);
+        validate_locale(&self.locale)
     }
 }
 
 /// Global config file path
 pub fn global_config_path() -> Option<PathBuf> {
+    if let Some(override_dir) = std::env::var_os("ACR_CONFIG_HOME") {
+        let override_path = PathBuf::from(override_dir);
+        if !override_path.as_os_str().is_empty() {
+            return Some(override_path.join("cgen").join("config.toml"));
+        }
+    }
     dirs::config_dir().map(|d| d.join("cgen").join("config.toml"))
 }
 
@@ -500,6 +517,71 @@ fn normalize_post_commit_push(value: &str) -> String {
 
 fn parse_usize_or_default(value: &str, default: usize) -> usize {
     value.trim().parse::<usize>().unwrap_or(default)
+}
+
+fn normalize_locale(value: &str) -> String {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        default_locale()
+    } else {
+        normalized.to_ascii_lowercase()
+    }
+}
+
+fn validate_locale(locale: &str) -> Result<()> {
+    if locale == "en" || locale_has_i18n(locale) {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "Unsupported locale '{}'. Only 'en' is available unless matching i18n resources exist. Set locale with `cgen config` or add i18n files first.",
+        locale
+    );
+}
+
+fn locale_has_i18n(locale: &str) -> bool {
+    locale_i18n_dirs()
+        .iter()
+        .any(|dir| locale_exists_in_i18n_dir(dir, locale))
+}
+
+fn locale_i18n_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(repo_root) = crate::git::find_repo_root() {
+        dirs.push(PathBuf::from(repo_root).join("i18n"));
+    }
+    if let Ok(current_dir) = std::env::current_dir() {
+        let i18n_dir = current_dir.join("i18n");
+        if !dirs.contains(&i18n_dir) {
+            dirs.push(i18n_dir);
+        }
+    }
+    dirs
+}
+
+fn locale_exists_in_i18n_dir(i18n_dir: &PathBuf, locale: &str) -> bool {
+    if !i18n_dir.exists() {
+        return false;
+    }
+    if i18n_dir.join(locale).is_dir() {
+        return true;
+    }
+
+    let entries = match std::fs::read_dir(i18n_dir) {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+
+    entries.filter_map(|entry| entry.ok()).any(|entry| {
+        let path = entry.path();
+        if path.is_file() {
+            return path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(|stem| stem.eq_ignore_ascii_case(locale))
+                .unwrap_or(false);
+        }
+        false
+    })
 }
 
 fn parse_dotenv(path: &PathBuf) -> Result<HashMap<String, String>> {

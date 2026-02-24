@@ -1,0 +1,33 @@
+name: Test and Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run test suite
+        run: cargo test --locked
+
+      - name: Enforce core logic coverage >= 95%
+        run: >
+          cargo llvm-cov --locked --lib --tests
+          --ignore-filename-regex 'src/main.rs|src/cli.rs'
+          --summary-only
+          --fail-under-lines 95

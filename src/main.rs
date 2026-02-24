@@ -1,11 +1,5 @@
-mod cli;
-mod config;
-mod git;
-mod interpolation;
-mod prompt;
-mod provider;
-
 use anyhow::{Context, Result};
+use auto_commit_rs::{cli, config, git, prompt, provider};
 use colored::Colorize;
 use inquire::{Confirm, Select, Text};
 
@@ -185,7 +179,7 @@ fn generate_final_message(
 ) -> Result<Option<String>> {
     let system_prompt = prompt::build_system_prompt(cfg);
     if verbose {
-        println!("\n{}", "LLM system prompt (diff omitted):".cyan().bold());
+        println!("\n{}", "LLM system prompt:".cyan().bold());
         println!("{system_prompt}\n");
     }
     let mut message =

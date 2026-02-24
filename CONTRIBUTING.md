@@ -99,6 +99,19 @@ Suggested manual smoke checks:
 - `undo` on unpushed commit
 - `undo` on pushed commit (should warn and require confirmation)
 
+Automated quality gates (same checks as CI):
+
+```sh
+# Full test suite
+cargo test --locked
+
+# Coverage gate for core logic
+cargo llvm-cov --locked --lib --tests \
+  --ignore-filename-regex 'src/main.rs|src/cli.rs' \
+  --summary-only \
+  --fail-under-lines 95
+```
+
 ## Project Structure
 
 ```

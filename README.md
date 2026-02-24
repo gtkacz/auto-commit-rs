@@ -169,6 +169,19 @@ export ACR_API_URL=http://localhost:11434/v1/chat/completions
 export ACR_MODEL=llama3
 ```
 
+## Testing and Coverage
+
+```sh
+# Run all tests
+cargo test --locked
+
+# Enforce core logic coverage (matches CI gate)
+cargo llvm-cov --locked --lib --tests \
+  --ignore-filename-regex 'src/main.rs|src/cli.rs' \
+  --summary-only \
+  --fail-under-lines 95
+```
+
 ## Contributing
 
 Contributions are welcome! Whether it's a new provider (often just 5 lines), a bug fix, or a documentation improvement — every bit helps.
