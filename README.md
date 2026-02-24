@@ -47,7 +47,7 @@ This downloads the latest release to `%LOCALAPPDATA%\cgen\` and adds it to your 
 
 ### Cargo
 
-From [crates.io](https://crates.io/crates/auto-commit-rs) (recommended):
+From [crates.io](https://crates.io/crates/auto-commit-rs):
 
 ```sh
 cargo install auto-commit-rs
