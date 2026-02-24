@@ -126,6 +126,13 @@ pub fn interactive_config(global: bool) -> Result<()> {
                     .ok()
                     .map(|v| v.to_string())
             }
+            "REVIEW_COMMIT" => {
+                let choices = vec!["0 (no)", "1 (yes)"];
+                Select::new("Review commit before confirming:", choices)
+                    .prompt()
+                    .ok()
+                    .map(|v| v.chars().next().unwrap().to_string())
+            }
             "API_KEY" => {
                 Text::new("API Key:")
                     .with_help_message("Your LLM provider API key")

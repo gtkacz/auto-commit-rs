@@ -31,6 +31,8 @@ pub struct AppConfig {
     pub use_gitmoji: bool,
     #[serde(default = "default_gitmoji_format")]
     pub gitmoji_format: String,
+    #[serde(default)]
+    pub review_commit: bool,
 }
 
 fn default_provider() -> String { "groq".into() }
@@ -55,6 +57,7 @@ impl Default for AppConfig {
             llm_system_prompt: default_system_prompt(),
             use_gitmoji: false,
             gitmoji_format: default_gitmoji_format(),
+            review_commit: false,
         }
     }
 }
@@ -72,6 +75,7 @@ const ENV_FIELD_MAP: &[(&str, &str)] = &[
     ("LLM_SYSTEM_PROMPT", "llm_system_prompt"),
     ("USE_GITMOJI", "use_gitmoji"),
     ("GITMOJI_FORMAT", "gitmoji_format"),
+    ("REVIEW_COMMIT", "review_commit"),
 ];
 
 impl AppConfig {
@@ -124,6 +128,7 @@ impl AppConfig {
         if !other.llm_system_prompt.is_empty() { self.llm_system_prompt = other.llm_system_prompt.clone(); }
         self.use_gitmoji = other.use_gitmoji;
         if !other.gitmoji_format.is_empty() { self.gitmoji_format = other.gitmoji_format.clone(); }
+        self.review_commit = other.review_commit;
     }
 
     fn apply_env_map(&mut self, map: &HashMap<String, String>) {
@@ -142,6 +147,7 @@ impl AppConfig {
                     "LLM_SYSTEM_PROMPT" => self.llm_system_prompt = val.clone(),
                     "USE_GITMOJI" => self.use_gitmoji = val == "1" || val.eq_ignore_ascii_case("true"),
                     "GITMOJI_FORMAT" => self.gitmoji_format = val.clone(),
+                    "REVIEW_COMMIT" => self.review_commit = val == "1" || val.eq_ignore_ascii_case("true"),
                     _ => {}
                 }
             }
@@ -191,6 +197,7 @@ impl AppConfig {
         }
         lines.push(format!("ACR_USE_GITMOJI={}", if self.use_gitmoji { "1" } else { "0" }));
         lines.push(format!("ACR_GITMOJI_FORMAT={}", self.gitmoji_format));
+        lines.push(format!("ACR_REVIEW_COMMIT={}", if self.review_commit { "1" } else { "0" }));
 
         std::fs::write(&env_path, lines.join("\n") + "\n")
             .with_context(|| format!("Failed to write {}", env_path.display()))?;
@@ -211,6 +218,7 @@ impl AppConfig {
             ("System Prompt", "LLM_SYSTEM_PROMPT", truncate(&self.llm_system_prompt, 60)),
             ("Use Gitmoji", "USE_GITMOJI", if self.use_gitmoji { "1 (yes)".into() } else { "0 (no)".into() }),
             ("Gitmoji Format", "GITMOJI_FORMAT", self.gitmoji_format.clone()),
+            ("Review Commit", "REVIEW_COMMIT", if self.review_commit { "1 (yes)".into() } else { "0 (no)".into() }),
         ]
     }
 
@@ -228,6 +236,7 @@ impl AppConfig {
             "LLM_SYSTEM_PROMPT" => self.llm_system_prompt = value.into(),
             "USE_GITMOJI" => self.use_gitmoji = value == "1" || value.eq_ignore_ascii_case("true"),
             "GITMOJI_FORMAT" => self.gitmoji_format = value.into(),
+            "REVIEW_COMMIT" => self.review_commit = value == "1" || value.eq_ignore_ascii_case("true"),
             _ => {}
         }
     }

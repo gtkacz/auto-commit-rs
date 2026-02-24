@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # cgen installer for Linux and macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.sh | bash
 
 set -euo pipefail
 
-REPO="gtkacz/rust-auto-commit"
+REPO="gtkacz/auto-commit-rs"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="cgen"
 

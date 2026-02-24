@@ -1,4 +1,4 @@
-# cgen
+# auto-commit-rs
 
 Minimal CLI tool that generates git commit messages via LLMs.
 
@@ -28,19 +28,19 @@ Tools like [opencommit](https://github.com/di-sukharev/opencommit) do the same t
 ### Linux / macOS (curl)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.sh | bash
 ```
 
 This detects your OS and architecture, downloads the latest release binary to `/usr/local/bin`, and makes it executable. Set `INSTALL_DIR` to change the target:
 
 ```sh
-INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.sh | bash
+INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/gtkacz/rust-auto-commit/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.ps1 | iex
 ```
 
 This downloads the latest release to `%LOCALAPPDATA%\cgen\` and adds it to your user PATH.
@@ -48,12 +48,12 @@ This downloads the latest release to `%LOCALAPPDATA%\cgen\` and adds it to your 
 ### Cargo
 
 ```sh
-cargo install --git https://github.com/gtkacz/rust-auto-commit
+cargo install --git https://github.com/gtkacz/auto-commit-rs
 ```
 
 ### Manual Download
 
-Grab a binary from the [Releases](https://github.com/gtkacz/rust-auto-commit/releases) page and place it somewhere in your PATH.
+Grab a binary from the [Releases](https://github.com/gtkacz/auto-commit-rs/releases) page and place it somewhere in your PATH.
 
 Available binaries:
 - `cgen-linux-amd64` — Linux x86_64
@@ -101,6 +101,7 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 | `ACR_LLM_SYSTEM_PROMPT` | (built-in) | Base system prompt |
 | `ACR_USE_GITMOJI` | `0` | Enable gitmoji (`1`/`0`) |
 | `ACR_GITMOJI_FORMAT` | `unicode` | Gitmoji style (`unicode`/`shortcode`) |
+| `ACR_REVIEW_COMMIT` | `0` | Review message before committing (`1`/`0`) |
 
 ### Config Locations
 

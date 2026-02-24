@@ -118,8 +118,6 @@ pub fn call_llm(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<Stri
             )
         })?;
 
-    eprintln!("{} {}", "Commit message:".green().bold(), message.trim());
-
     Ok(message)
 }
 
