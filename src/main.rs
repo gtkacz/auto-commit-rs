@@ -13,7 +13,7 @@ fn main() {
 fn run() -> Result<()> {
     let cli = cli::parse();
     let cfg = match &cli.command {
-        Some(cli::Command::Config { .. }) | Some(cli::Command::Update) => None,
+        Some(cli::Command::Config) | Some(cli::Command::Update) => None,
         _ => Some(config::AppConfig::load()?),
     };
 
@@ -26,13 +26,13 @@ fn run() -> Result<()> {
 
     // Check for updates (except for config/update commands)
     let update_warning = match &cli.command {
-        Some(cli::Command::Config { .. }) | Some(cli::Command::Update) => None,
+        Some(cli::Command::Config) | Some(cli::Command::Update) => None,
         _ => check_for_updates(cfg.as_ref()),
     };
 
     match &cli.command {
-        Some(cli::Command::Config { global }) => {
-            cli::interactive_config(*global)?;
+        Some(cli::Command::Config) => {
+            run_config_command()?;
         }
         Some(cli::Command::Update) => {
             run_update_command()?;
@@ -46,6 +46,12 @@ fn run() -> Result<()> {
                 &cli,
                 commits,
             )?;
+        }
+        Some(cli::Command::Prompt) => {
+            let c = cfg.as_ref().expect("config should be loaded");
+            let system_prompt = prompt::build_system_prompt(c);
+            println!("\n{}", "LLM system prompt:".cyan().bold());
+            println!("{system_prompt}");
         }
         None => {
             run_standard_commit(cfg.as_ref().expect("config should be loaded"), &cli)?;
@@ -298,8 +304,14 @@ fn print_staged_files(staged_files: &[String]) {
         return;
     }
 
-    for file in staged_files {
-        println!("  - {}", file);
+    let last = staged_files.len() - 1;
+    for (i, file) in staged_files.iter().enumerate() {
+        let connector = if i == last {
+            "\u{2514}\u{2500}\u{2500}"
+        } else {
+            "\u{251C}\u{2500}\u{2500}"
+        };
+        println!("  {} {}", connector, file);
     }
 }
 
@@ -388,6 +400,28 @@ fn check_for_updates(cfg: Option<&config::AppConfig>) -> Option<String> {
     }
 
     Some(version_check.latest)
+}
+
+fn run_config_command() -> Result<()> {
+    match git::find_repo_root() {
+        Ok(_) => {
+            let choices = vec!["Local (.env in repo)", "Global (TOML config)"];
+            let answer = Select::new("Configure global or local settings?", choices).prompt();
+            match answer {
+                Ok(choice) => {
+                    let global = choice.contains("Global");
+                    cli::interactive_config(global)?;
+                }
+                Err(_) => {
+                    println!("{}", "Cancelled.".dimmed());
+                }
+            }
+        }
+        Err(_) => {
+            cli::interactive_config(true)?;
+        }
+    }
+    Ok(())
 }
 
 fn run_update_command() -> Result<()> {

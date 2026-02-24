@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use auto_commit_rs::config::global_config_path;
 use tempfile::TempDir;
 
 pub struct DirGuard {
@@ -56,6 +57,52 @@ impl Drop for EnvGuard {
             } else {
                 std::env::remove_var(key);
             }
+        }
+    }
+}
+
+enum GlobalConfigState {
+    Missing,
+    Existing(Vec<u8>),
+    Unreadable,
+}
+
+pub struct GlobalConfigGuard {
+    path: Option<PathBuf>,
+    state: GlobalConfigState,
+}
+
+impl GlobalConfigGuard {
+    pub fn backup() -> Self {
+        let path = global_config_path();
+        let state = match path.as_ref() {
+            Some(config_path) if config_path.exists() => match std::fs::read(config_path) {
+                Ok(bytes) => GlobalConfigState::Existing(bytes),
+                Err(_) => GlobalConfigState::Unreadable,
+            },
+            _ => GlobalConfigState::Missing,
+        };
+        Self { path, state }
+    }
+}
+
+impl Drop for GlobalConfigGuard {
+    fn drop(&mut self) {
+        let Some(path) = self.path.as_ref() else {
+            return;
+        };
+
+        match &self.state {
+            GlobalConfigState::Missing => {
+                let _ = std::fs::remove_file(path);
+            }
+            GlobalConfigState::Existing(bytes) => {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::write(path, bytes);
+            }
+            GlobalConfigState::Unreadable => {}
         }
     }
 }

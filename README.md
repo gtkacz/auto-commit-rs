@@ -93,8 +93,8 @@ cgen alter <hash>       # Regenerate message from that commit's diff and rewrite
 cgen alter <old> <new>  # Use old..new net diff, rewrite <new> message
 cgen undo               # Undo latest commit with safety prompts (soft reset)
 cgen update             # Update cgen to the latest version
-cgen config             # Interactive config editor (local .env)
-cgen config --global    # Interactive config editor (global TOML)
+cgen config             # Interactive config editor (auto-detects scope)
+cgen prompt             # Print the LLM system prompt without running anything
 ```
 
 Any arguments passed to `cgen` (without a subcommand) are forwarded directly to `git commit`.
@@ -116,7 +116,7 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 | `ACR_LLM_SYSTEM_PROMPT` | (built-in) | Base system prompt |
 | `ACR_USE_GITMOJI` | `0` | Enable gitmoji (`1`/`0`) |
 | `ACR_GITMOJI_FORMAT` | `unicode` | Gitmoji style (`unicode`/`shortcode`) |
-| `ACR_REVIEW_COMMIT` | `0` | Review message before committing (`1`/`0`) |
+| `ACR_REVIEW_COMMIT` | `1` | Review message before committing (`1`/`0`) |
 | `ACR_POST_COMMIT_PUSH` | `ask` | Post-commit push behavior (`never`/`ask`/`always`) |
 | `ACR_SUPPRESS_TOOL_OUTPUT` | `0` | Suppress git subprocess output (`1`/`0`) |
 | `ACR_WARN_STAGED_FILES_ENABLED` | `1` | Warn when staged file count exceeds threshold (`1`/`0`) |
@@ -144,6 +144,8 @@ ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
 - If staged files exceed `ACR_WARN_STAGED_FILES_THRESHOLD` and warnings are enabled, cgen asks for confirmation before continuing.
 - `cgen --dry-run` generates and prints the final commit message but does not create a commit.
 - `cgen --verbose` prints the final system prompt sent to the LLM and never prints diff payload.
+- `cgen prompt` prints the full LLM system prompt (based on current config) without running any LLM call or git operations.
+- `cgen config` auto-detects the context: inside a git repo it asks whether to edit local or global settings; outside a repo it opens the global config directly.
 - `cgen alter --dry-run` generates and prints the rewritten message but does not rewrite history.
 - `cgen --tag` creates a semantic version tag after a successful commit:
   - no existing tag -> `0.1.0`

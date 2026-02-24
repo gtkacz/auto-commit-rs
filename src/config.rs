@@ -3,6 +3,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub struct FieldSubgroup {
+    pub name: &'static str,
+    pub fields: Vec<(&'static str, &'static str, String)>,
+}
+
+pub struct FieldGroup {
+    pub name: &'static str,
+    pub fields: Vec<(&'static str, &'static str, String)>,
+    pub subgroups: Vec<FieldSubgroup>,
+}
+
 const DEFAULT_SYSTEM_PROMPT: &str = "You are to act as an author of a commit message in git. \
 I'll send you an output of 'git diff --staged' command, and you are to convert \
 it into a commit message. Follow the Conventional Commits specification.";
@@ -89,7 +100,7 @@ impl Default for AppConfig {
             llm_system_prompt: default_system_prompt(),
             use_gitmoji: false,
             gitmoji_format: default_gitmoji_format(),
-            review_commit: false,
+            review_commit: true,
             post_commit_push: default_post_commit_push(),
             suppress_tool_output: false,
             warn_staged_files_enabled: true,
@@ -373,9 +384,9 @@ impl AppConfig {
                 "One-liner",
                 "ONE_LINER",
                 if self.one_liner {
-                    "1 (yes)".into()
+                    "enabled".into()
                 } else {
-                    "0 (no)".into()
+                    "disabled".into()
                 },
             ),
             (
@@ -392,9 +403,9 @@ impl AppConfig {
                 "Use Gitmoji",
                 "USE_GITMOJI",
                 if self.use_gitmoji {
-                    "1 (yes)".into()
+                    "enabled".into()
                 } else {
-                    "0 (no)".into()
+                    "disabled".into()
                 },
             ),
             (
@@ -406,9 +417,9 @@ impl AppConfig {
                 "Review Commit",
                 "REVIEW_COMMIT",
                 if self.review_commit {
-                    "1 (yes)".into()
+                    "enabled".into()
                 } else {
-                    "0 (no)".into()
+                    "disabled".into()
                 },
             ),
             (
@@ -420,18 +431,18 @@ impl AppConfig {
                 "Suppress Tool Output",
                 "SUPPRESS_TOOL_OUTPUT",
                 if self.suppress_tool_output {
-                    "1 (yes)".into()
+                    "enabled".into()
                 } else {
-                    "0 (no)".into()
+                    "disabled".into()
                 },
             ),
             (
                 "Warn Staged Files",
                 "WARN_STAGED_FILES_ENABLED",
                 if self.warn_staged_files_enabled {
-                    "1 (yes)".into()
+                    "enabled".into()
                 } else {
-                    "0 (no)".into()
+                    "disabled".into()
                 },
             ),
             (
@@ -443,20 +454,91 @@ impl AppConfig {
                 "Confirm New Version",
                 "CONFIRM_NEW_VERSION",
                 if self.confirm_new_version {
-                    "1 (yes)".into()
+                    "enabled".into()
                 } else {
-                    "0 (no)".into()
+                    "disabled".into()
                 },
             ),
             (
                 "Auto Update",
                 "AUTO_UPDATE",
                 match self.auto_update {
-                    Some(true) => "1 (yes)".into(),
-                    Some(false) => "0 (no)".into(),
+                    Some(true) => "enabled".into(),
+                    Some(false) => "disabled".into(),
                     None => "(not set)".into(),
                 },
             ),
+        ]
+    }
+
+    /// Field groups for the interactive config UI
+    pub fn grouped_fields(&self) -> Vec<FieldGroup> {
+        let fields = self.fields_display();
+        let field_map: std::collections::HashMap<&str, (&'static str, String)> = fields
+            .iter()
+            .map(|(name, suffix, val)| (*suffix, (*name, val.clone())))
+            .collect();
+
+        let basic_keys: &[&'static str] = &["PROVIDER", "MODEL", "API_KEY", "API_URL"];
+        let llm_keys: &[&'static str] = &[
+            "API_HEADERS",
+            "LOCALE",
+            "LLM_SYSTEM_PROMPT",
+            "COMMIT_TEMPLATE",
+        ];
+        let commit_keys: &[&'static str] = &[
+            "ONE_LINER",
+            "USE_GITMOJI",
+            "GITMOJI_FORMAT",
+            "REVIEW_COMMIT",
+        ];
+        let post_commit_keys: &[&'static str] = &["POST_COMMIT_PUSH", "SUPPRESS_TOOL_OUTPUT"];
+        let warnings_keys: &[&'static str] = &[
+            "WARN_STAGED_FILES_ENABLED",
+            "WARN_STAGED_FILES_THRESHOLD",
+            "CONFIRM_NEW_VERSION",
+            "AUTO_UPDATE",
+        ];
+
+        let collect =
+            |keys: &[&'static str]| -> Vec<(&'static str, &'static str, String)> {
+                keys.iter()
+                    .filter_map(|k| {
+                        field_map
+                            .get(k)
+                            .map(|(name, val)| (*name, *k, val.clone()))
+                    })
+                    .collect()
+            };
+
+        vec![
+            FieldGroup {
+                name: "Basic",
+                fields: collect(basic_keys),
+                subgroups: vec![],
+            },
+            FieldGroup {
+                name: "Advanced",
+                fields: vec![],
+                subgroups: vec![
+                    FieldSubgroup {
+                        name: "LLM Settings",
+                        fields: collect(llm_keys),
+                    },
+                    FieldSubgroup {
+                        name: "Commit Behavior",
+                        fields: collect(commit_keys),
+                    },
+                    FieldSubgroup {
+                        name: "Post-Commit",
+                        fields: collect(post_commit_keys),
+                    },
+                    FieldSubgroup {
+                        name: "Warnings & Updates",
+                        fields: collect(warnings_keys),
+                    },
+                ],
+            },
         ]
     }
 
