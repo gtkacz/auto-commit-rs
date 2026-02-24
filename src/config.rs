@@ -41,6 +41,8 @@ pub struct AppConfig {
     pub warn_staged_files_enabled: bool,
     #[serde(default = "default_warn_staged_files_threshold")]
     pub warn_staged_files_threshold: usize,
+    #[serde(default = "default_true")]
+    pub confirm_new_version: bool,
 }
 
 fn default_provider() -> String {
@@ -90,6 +92,7 @@ impl Default for AppConfig {
             suppress_tool_output: false,
             warn_staged_files_enabled: true,
             warn_staged_files_threshold: default_warn_staged_files_threshold(),
+            confirm_new_version: true,
         }
     }
 }
@@ -112,6 +115,7 @@ const ENV_FIELD_MAP: &[(&str, &str)] = &[
     ("SUPPRESS_TOOL_OUTPUT", "suppress_tool_output"),
     ("WARN_STAGED_FILES_ENABLED", "warn_staged_files_enabled"),
     ("WARN_STAGED_FILES_THRESHOLD", "warn_staged_files_threshold"),
+    ("CONFIRM_NEW_VERSION", "confirm_new_version"),
 ];
 
 impl AppConfig {
@@ -189,6 +193,7 @@ impl AppConfig {
         self.suppress_tool_output = other.suppress_tool_output;
         self.warn_staged_files_enabled = other.warn_staged_files_enabled;
         self.warn_staged_files_threshold = other.warn_staged_files_threshold;
+        self.confirm_new_version = other.confirm_new_version;
     }
 
     fn apply_env_map(&mut self, map: &HashMap<String, String>) {
@@ -223,6 +228,9 @@ impl AppConfig {
                     "WARN_STAGED_FILES_THRESHOLD" => {
                         self.warn_staged_files_threshold =
                             parse_usize_or_default(val, default_warn_staged_files_threshold());
+                    }
+                    "CONFIRM_NEW_VERSION" => {
+                        self.confirm_new_version = val == "1" || val.eq_ignore_ascii_case("true")
                     }
                     _ => {}
                 }
@@ -299,6 +307,10 @@ impl AppConfig {
         lines.push(format!(
             "ACR_WARN_STAGED_FILES_THRESHOLD={}",
             self.warn_staged_files_threshold
+        ));
+        lines.push(format!(
+            "ACR_CONFIRM_NEW_VERSION={}",
+            if self.confirm_new_version { "1" } else { "0" }
         ));
 
         std::fs::write(&env_path, lines.join("\n") + "\n")
@@ -409,6 +421,15 @@ impl AppConfig {
                 "WARN_STAGED_FILES_THRESHOLD",
                 self.warn_staged_files_threshold.to_string(),
             ),
+            (
+                "Confirm New Version",
+                "CONFIRM_NEW_VERSION",
+                if self.confirm_new_version {
+                    "1 (yes)".into()
+                } else {
+                    "0 (no)".into()
+                },
+            ),
         ]
     }
 
@@ -439,6 +460,9 @@ impl AppConfig {
             "WARN_STAGED_FILES_THRESHOLD" => {
                 self.warn_staged_files_threshold =
                     parse_usize_or_default(value, default_warn_staged_files_threshold());
+            }
+            "CONFIRM_NEW_VERSION" => {
+                self.confirm_new_version = value == "1" || value.eq_ignore_ascii_case("true");
             }
             _ => {}
         }

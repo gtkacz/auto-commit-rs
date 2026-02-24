@@ -31,7 +31,11 @@ fn run() -> Result<()> {
             run_undo(cfg.as_ref().expect("config should be loaded"))?;
         }
         Some(cli::Command::Alter { commits }) => {
-            run_alter(cfg.as_ref().expect("config should be loaded"), &cli, commits)?;
+            run_alter(
+                cfg.as_ref().expect("config should be loaded"),
+                &cli,
+                commits,
+            )?;
         }
         None => {
             run_standard_commit(cfg.as_ref().expect("config should be loaded"), &cli)?;
@@ -64,7 +68,7 @@ fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
     }
 
     let diff = git::get_staged_diff().context("Failed to get staged diff")?;
-    let Some(final_msg) = generate_final_message(cfg, &diff)? else {
+    let Some(final_msg) = generate_final_message(cfg, &diff, cli.verbose)? else {
         return Ok(());
     };
 
@@ -78,6 +82,10 @@ fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
 
     git::run_commit(&final_msg, &cli.extra_args, cfg.suppress_tool_output)
         .context("git commit failed")?;
+
+    if cli.tag {
+        create_semver_tag(cfg)?;
+    }
 
     handle_post_commit_push(cfg, "Commit created. Push now?")?;
     Ok(())
@@ -113,7 +121,7 @@ fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Res
         }
     }
 
-    let Some(final_msg) = generate_final_message(cfg, &diff)? else {
+    let Some(final_msg) = generate_final_message(cfg, &diff, cli.verbose)? else {
         return Ok(());
     };
 
@@ -131,12 +139,11 @@ fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Res
         .context("Failed to rewrite commit message")?;
 
     if target_is_pushed {
-        let should_push = Confirm::new(
-            "History was rewritten on a pushed commit. Attempt `git push` now?",
-        )
-        .with_default(false)
-        .prompt()
-        .unwrap_or(false);
+        let should_push =
+            Confirm::new("History was rewritten on a pushed commit. Attempt `git push` now?")
+                .with_default(false)
+                .prompt()
+                .unwrap_or(false);
         if should_push {
             if !target_is_head {
                 println!(
@@ -171,9 +178,18 @@ fn ensure_api_key(cfg: &config::AppConfig) -> Result<()> {
     Ok(())
 }
 
-fn generate_final_message(cfg: &config::AppConfig, diff: &str) -> Result<Option<String>> {
+fn generate_final_message(
+    cfg: &config::AppConfig,
+    diff: &str,
+    verbose: bool,
+) -> Result<Option<String>> {
     let system_prompt = prompt::build_system_prompt(cfg);
-    let mut message = provider::call_llm(cfg, &system_prompt, diff).context("LLM API call failed")?;
+    if verbose {
+        println!("\n{}", "LLM system prompt (diff omitted):".cyan().bold());
+        println!("{system_prompt}\n");
+    }
+    let mut message =
+        provider::call_llm(cfg, &system_prompt, diff).context("LLM API call failed")?;
 
     let final_msg = if cfg.review_commit {
         loop {
@@ -185,8 +201,8 @@ fn generate_final_message(cfg: &config::AppConfig, diff: &str) -> Result<Option<
             match review_message()? {
                 ReviewAction::Accept => break candidate,
                 ReviewAction::Regenerate => {
-                    message =
-                        provider::call_llm(cfg, &system_prompt, diff).context("LLM API call failed")?;
+                    message = provider::call_llm(cfg, &system_prompt, diff)
+                        .context("LLM API call failed")?;
                 }
                 ReviewAction::Edit => {
                     let edited = Text::new("Edit commit message:")
@@ -207,6 +223,33 @@ fn generate_final_message(cfg: &config::AppConfig, diff: &str) -> Result<Option<
     };
 
     Ok(Some(final_msg))
+}
+
+fn create_semver_tag(cfg: &config::AppConfig) -> Result<()> {
+    let latest = git::get_latest_tag().context("Failed to inspect existing tags")?;
+    let next_tag = git::compute_next_minor_tag(latest.as_deref())?;
+
+    let should_create = if cfg.confirm_new_version {
+        let prompt = match latest.as_deref() {
+            Some(tag) => format!("Create new tag {next_tag} (latest: {tag})?"),
+            None => format!("Create initial tag {next_tag}?"),
+        };
+        Confirm::new(&prompt)
+            .with_default(true)
+            .prompt()
+            .unwrap_or(false)
+    } else {
+        true
+    };
+
+    if !should_create {
+        println!("{}", "Tag creation skipped.".dimmed());
+        return Ok(());
+    }
+
+    git::create_tag(&next_tag, cfg.suppress_tool_output).context("Failed to create git tag")?;
+    println!("{} {}", "Created tag:".green().bold(), next_tag);
+    Ok(())
 }
 
 enum ReviewAction {

@@ -20,6 +20,14 @@ pub struct Cli {
     #[arg(long)]
     pub dry_run: bool,
 
+    /// Print the final system prompt sent to the LLM (without diff payload)
+    #[arg(long)]
+    pub verbose: bool,
+
+    /// Create a semantic version tag after a successful commit
+    #[arg(long)]
+    pub tag: bool,
+
     /// Extra arguments forwarded to `git commit`
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
@@ -166,6 +174,13 @@ pub fn interactive_config(global: bool) -> Result<()> {
                 )
                 .prompt()
                 .ok(),
+            "CONFIRM_NEW_VERSION" => {
+                let choices = vec!["1 (yes)", "0 (no)"];
+                Select::new("Confirm new semantic version tag:", choices)
+                    .prompt()
+                    .ok()
+                    .map(|v| v.chars().next().unwrap().to_string())
+            }
             "API_KEY" => Text::new("API Key:")
                 .with_help_message("Your LLM provider API key")
                 .prompt()

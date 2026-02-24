@@ -92,6 +92,51 @@ pub fn run_push(suppress_output: bool) -> Result<()> {
     Ok(())
 }
 
+/// Returns the latest tag according to git version sorting.
+pub fn get_latest_tag() -> Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["tag", "--sort=-version:refname"])
+        .output()
+        .context("Failed to run git tag --sort=-version:refname")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("git tag --sort=-version:refname failed: {stderr}");
+    }
+
+    let latest = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(ToString::to_string);
+
+    Ok(latest)
+}
+
+/// Compute the next minor semver tag from latest tag.
+pub fn compute_next_minor_tag(latest: Option<&str>) -> Result<String> {
+    let Some(latest_tag) = latest else {
+        return Ok("0.1.0".to_string());
+    };
+
+    let (major, minor, _patch) = parse_semver_tag(latest_tag)?;
+    Ok(format!("{major}.{}.0", minor + 1))
+}
+
+/// Create a git lightweight tag.
+pub fn create_tag(tag_name: &str, suppress_output: bool) -> Result<()> {
+    let mut cmd = Command::new("git");
+    cmd.args(["tag", tag_name]);
+    configure_stdio(&mut cmd, suppress_output);
+    let status = cmd.status().context("Failed to run git tag")?;
+
+    if !status.success() {
+        bail!("git tag exited with status {status}");
+    }
+
+    Ok(())
+}
+
 /// Returns true when HEAD exists on upstream branch
 pub fn is_head_pushed() -> Result<bool> {
     if !has_upstream_branch()? {
@@ -414,4 +459,23 @@ fn make_executable(path: &Path) -> Result<()> {
 
 fn script_command(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+fn parse_semver_tag(tag: &str) -> Result<(u64, u64, u64)> {
+    let parts: Vec<&str> = tag.trim().split('.').collect();
+    if parts.len() != 3 {
+        bail!("Latest tag '{tag}' is not valid semantic versioning (expected MAJOR.MINOR.PATCH).");
+    }
+
+    let major = parts[0]
+        .parse::<u64>()
+        .with_context(|| format!("Latest tag '{tag}' is not valid semantic versioning."))?;
+    let minor = parts[1]
+        .parse::<u64>()
+        .with_context(|| format!("Latest tag '{tag}' is not valid semantic versioning."))?;
+    let patch = parts[2]
+        .parse::<u64>()
+        .with_context(|| format!("Latest tag '{tag}' is not valid semantic versioning."))?;
+
+    Ok((major, minor, patch))
 }
