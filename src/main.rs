@@ -18,100 +18,195 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = cli::parse();
+    let cfg = match &cli.command {
+        Some(cli::Command::Config { .. }) => None,
+        _ => Some(config::AppConfig::load()?),
+    };
 
-    match cli.command {
+    match &cli.command {
         Some(cli::Command::Config { global }) => {
-            cli::interactive_config(global)?;
+            cli::interactive_config(*global)?;
         }
         Some(cli::Command::Undo) => {
-            let cfg = config::AppConfig::load()?;
-            run_undo(&cfg)?;
+            run_undo(cfg.as_ref().expect("config should be loaded"))?;
+        }
+        Some(cli::Command::Alter { commits }) => {
+            run_alter(cfg.as_ref().expect("config should be loaded"), &cli, commits)?;
         }
         None => {
-            let cfg = config::AppConfig::load()?;
-
-            if cfg.api_key.is_empty() {
-                anyhow::bail!(
-                    "No API key configured. Run {} or set {}",
-                    "cgen config".yellow(),
-                    "ACR_API_KEY".yellow()
-                );
-            }
-
-            let staged_files = git::list_staged_files().context("Failed to list staged files")?;
-            print_staged_files(&staged_files);
-
-            if cfg.warn_staged_files_enabled && staged_files.len() > cfg.warn_staged_files_threshold
-            {
-                let prompt = format!(
-                    "You have {} staged files (threshold {}). Continue with commit generation?",
-                    staged_files.len(),
-                    cfg.warn_staged_files_threshold
-                );
-                let should_continue = Confirm::new(&prompt)
-                    .with_default(false)
-                    .prompt()
-                    .unwrap_or(false);
-                if !should_continue {
-                    println!("{}", "Commit cancelled.".dimmed());
-                    return Ok(());
-                }
-            }
-
-            let diff = git::get_staged_diff().context("Failed to get staged diff")?;
-
-            let system_prompt = prompt::build_system_prompt(&cfg);
-
-            let mut message =
-                provider::call_llm(&cfg, &system_prompt, &diff).context("LLM API call failed")?;
-
-            let final_msg = if cfg.review_commit {
-                loop {
-                    let candidate = cfg.commit_template.replace("$msg", message.trim());
-
-                    println!("\n{}", "Commit message:".green().bold());
-                    println!("  {}\n", candidate);
-
-                    match review_message()? {
-                        ReviewAction::Accept => break candidate,
-                        ReviewAction::Regenerate => {
-                            message = provider::call_llm(&cfg, &system_prompt, &diff)
-                                .context("LLM API call failed")?;
-                        }
-                        ReviewAction::Edit => {
-                            let edited = Text::new("Edit commit message:")
-                                .with_default(&candidate)
-                                .prompt()?;
-                            break edited;
-                        }
-                        ReviewAction::Cancel => {
-                            println!("{}", "Commit cancelled.".dimmed());
-                            return Ok(());
-                        }
-                    }
-                }
-            } else {
-                let final_msg = cfg.commit_template.replace("$msg", message.trim());
-                println!("\n{} {}", "Commit message:".green().bold(), final_msg);
-                final_msg
-            };
-
-            if cli.dry_run {
-                println!(
-                    "\n{}",
-                    "Dry run enabled. Commit not created.".yellow().bold()
-                );
-                return Ok(());
-            }
-
-            git::run_commit(&final_msg, &cli.extra_args, cfg.suppress_tool_output)
-                .context("git commit failed")?;
-
-            handle_post_commit_push(&cfg)?;
+            run_standard_commit(cfg.as_ref().expect("config should be loaded"), &cli)?;
         }
     }
 
     Ok(())
+}
+
+fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
+    ensure_api_key(cfg)?;
+
+    let staged_files = git::list_staged_files().context("Failed to list staged files")?;
+    print_staged_files(&staged_files);
+
+    if cfg.warn_staged_files_enabled && staged_files.len() > cfg.warn_staged_files_threshold {
+        let prompt = format!(
+            "You have {} staged files (threshold {}). Continue with commit generation?",
+            staged_files.len(),
+            cfg.warn_staged_files_threshold
+        );
+        let should_continue = Confirm::new(&prompt)
+            .with_default(false)
+            .prompt()
+            .unwrap_or(false);
+        if !should_continue {
+            println!("{}", "Commit cancelled.".dimmed());
+            return Ok(());
+        }
+    }
+
+    let diff = git::get_staged_diff().context("Failed to get staged diff")?;
+    let Some(final_msg) = generate_final_message(cfg, &diff)? else {
+        return Ok(());
+    };
+
+    if cli.dry_run {
+        println!(
+            "\n{}",
+            "Dry run enabled. Commit not created.".yellow().bold()
+        );
+        return Ok(());
+    }
+
+    git::run_commit(&final_msg, &cli.extra_args, cfg.suppress_tool_output)
+        .context("git commit failed")?;
+
+    handle_post_commit_push(cfg, "Commit created. Push now?")?;
+    Ok(())
+}
+
+fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Result<()> {
+    ensure_api_key(cfg)?;
+
+    let (target, diff) = match commits {
+        [single] => (
+            single.to_string(),
+            git::get_commit_diff(single).context("Failed to get commit diff")?,
+        ),
+        [older, newer] => (
+            newer.to_string(),
+            git::get_range_diff(older, newer).context("Failed to get range diff")?,
+        ),
+        _ => anyhow::bail!("Expected one or two commit hashes."),
+    };
+
+    let target_is_head = git::is_head_commit(&target)?;
+    let target_is_pushed = git::commit_is_pushed(&target)?;
+    if target_is_pushed {
+        let proceed = Confirm::new(
+            "Target commit appears to be pushed already. Rewriting history may require a force push. Continue?",
+        )
+        .with_default(false)
+        .prompt()
+        .unwrap_or(false);
+        if !proceed {
+            println!("{}", "Alter cancelled.".dimmed());
+            return Ok(());
+        }
+    }
+
+    let Some(final_msg) = generate_final_message(cfg, &diff)? else {
+        return Ok(());
+    };
+
+    if cli.dry_run {
+        println!(
+            "\n{}",
+            "Dry run enabled. Commit message was generated but history was not rewritten."
+                .yellow()
+                .bold()
+        );
+        return Ok(());
+    }
+
+    git::rewrite_commit_message(&target, &final_msg, cfg.suppress_tool_output)
+        .context("Failed to rewrite commit message")?;
+
+    if target_is_pushed {
+        let should_push = Confirm::new(
+            "History was rewritten on a pushed commit. Attempt `git push` now?",
+        )
+        .with_default(false)
+        .prompt()
+        .unwrap_or(false);
+        if should_push {
+            if !target_is_head {
+                println!(
+                    "{}",
+                    "Note: a non-HEAD rewrite may require `git push --force-with-lease`."
+                        .yellow()
+                        .bold()
+                );
+            }
+            git::run_push(cfg.suppress_tool_output).context("git push failed")?;
+        } else {
+            println!(
+                "{}",
+                "Skipped push after history rewrite. Push manually when ready.".dimmed()
+            );
+        }
+    } else {
+        handle_post_commit_push(cfg, "Commit message altered. Push now?")?;
+    }
+
+    Ok(())
+}
+
+fn ensure_api_key(cfg: &config::AppConfig) -> Result<()> {
+    if cfg.api_key.is_empty() {
+        anyhow::bail!(
+            "No API key configured. Run {} or set {}",
+            "cgen config".yellow(),
+            "ACR_API_KEY".yellow()
+        );
+    }
+    Ok(())
+}
+
+fn generate_final_message(cfg: &config::AppConfig, diff: &str) -> Result<Option<String>> {
+    let system_prompt = prompt::build_system_prompt(cfg);
+    let mut message = provider::call_llm(cfg, &system_prompt, diff).context("LLM API call failed")?;
+
+    let final_msg = if cfg.review_commit {
+        loop {
+            let candidate = cfg.commit_template.replace("$msg", message.trim());
+
+            println!("\n{}", "Commit message:".green().bold());
+            println!("  {}\n", candidate);
+
+            match review_message()? {
+                ReviewAction::Accept => break candidate,
+                ReviewAction::Regenerate => {
+                    message =
+                        provider::call_llm(cfg, &system_prompt, diff).context("LLM API call failed")?;
+                }
+                ReviewAction::Edit => {
+                    let edited = Text::new("Edit commit message:")
+                        .with_default(&candidate)
+                        .prompt()?;
+                    break edited;
+                }
+                ReviewAction::Cancel => {
+                    println!("{}", "Commit cancelled.".dimmed());
+                    return Ok(None);
+                }
+            }
+        }
+    } else {
+        let final_msg = cfg.commit_template.replace("$msg", message.trim());
+        println!("\n{} {}", "Commit message:".green().bold(), final_msg);
+        final_msg
+    };
+
+    Ok(Some(final_msg))
 }
 
 enum ReviewAction {
@@ -150,14 +245,14 @@ fn print_staged_files(staged_files: &[String]) {
     }
 }
 
-fn handle_post_commit_push(cfg: &config::AppConfig) -> Result<()> {
+fn handle_post_commit_push(cfg: &config::AppConfig, ask_prompt: &str) -> Result<()> {
     match cfg.post_commit_push.as_str() {
         "never" => {}
         "always" => {
             git::run_push(cfg.suppress_tool_output).context("git push failed")?;
         }
         _ => {
-            let should_push = Confirm::new("Commit created. Push now?")
+            let should_push = Confirm::new(ask_prompt)
                 .with_default(true)
                 .prompt()
                 .unwrap_or(false);

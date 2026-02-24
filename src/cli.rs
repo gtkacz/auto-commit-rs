@@ -35,6 +35,12 @@ pub enum Command {
     },
     /// Undo latest commit (soft reset)
     Undo,
+    /// Generate message from existing commit diff and rewrite commit message
+    Alter {
+        /// One hash: rewrite that commit from its own diff. Two hashes: use older..newer diff and rewrite newer.
+        #[arg(value_name = "HASH", num_args = 1..=2)]
+        commits: Vec<String>,
+    },
 }
 
 pub fn parse() -> Cli {

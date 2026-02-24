@@ -79,6 +79,8 @@ cgen
 cgen                    # Generate commit message and commit
 cgen --dry-run          # Generate and show message without committing
 cgen --no-verify        # Forward flags to git commit
+cgen alter <hash>       # Regenerate message from that commit's diff and rewrite it
+cgen alter <old> <new>  # Use old..new net diff, rewrite <new> message
 cgen undo               # Undo latest commit with safety prompts (soft reset)
 cgen config             # Interactive config editor (local .env)
 cgen config --global    # Interactive config editor (global TOML)
@@ -128,10 +130,14 @@ ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
 - `cgen` now prints staged file count and names before generating a commit message.
 - If staged files exceed `ACR_WARN_STAGED_FILES_THRESHOLD` and warnings are enabled, cgen asks for confirmation before continuing.
 - `cgen --dry-run` generates and prints the final commit message but does not create a commit.
+- `cgen alter --dry-run` generates and prints the rewritten message but does not rewrite history.
+- `cgen alter <old> <new>` uses the `old..new` net diff as LLM input and rewrites only the `<new>` commit message.
+- If `cgen alter` targets an already-pushed commit, cgen requires explicit confirmation before rewriting.
 - After a real commit, push behavior follows `ACR_POST_COMMIT_PUSH`:
   - `never`: never push
   - `ask`: prompt whether to push (default)
   - `always`: push automatically
+- For rewritten pushed history, cgen does not auto-force-push; use manual `git push --force-with-lease` if needed.
 - `cgen undo` only undoes the latest commit (`git reset --soft HEAD~1`), never pushes, and warns before undoing pushed commits.
 
 ## Providers

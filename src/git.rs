@@ -1,4 +1,6 @@
 use anyhow::{bail, Context, Result};
+use std::fs;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// Get the output of `git diff --staged`
@@ -180,4 +182,236 @@ fn configure_stdio(cmd: &mut Command, suppress_output: bool) {
     if suppress_output {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
+}
+
+pub fn ensure_commit_exists(commit: &str) -> Result<()> {
+    let status = Command::new("git")
+        .args(["rev-parse", "--verify", &format!("{commit}^{{commit}}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .with_context(|| format!("Failed to verify commit reference {commit}"))?;
+
+    if !status.success() {
+        bail!("Commit reference not found: {commit}");
+    }
+    Ok(())
+}
+
+pub fn get_commit_diff(commit: &str) -> Result<String> {
+    ensure_commit_exists(commit)?;
+    let output = Command::new("git")
+        .args(["show", "--format=", "--no-color", commit])
+        .output()
+        .with_context(|| format!("Failed to run git show for {commit}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("git show failed for {commit}: {stderr}");
+    }
+
+    let diff = String::from_utf8_lossy(&output.stdout).to_string();
+    if diff.trim().is_empty() {
+        bail!("Selected commit has no diff to analyze: {commit}");
+    }
+    Ok(diff)
+}
+
+pub fn get_range_diff(older: &str, newer: &str) -> Result<String> {
+    ensure_commit_exists(older)?;
+    ensure_commit_exists(newer)?;
+
+    let output = Command::new("git")
+        .args(["diff", "--no-color", older, newer])
+        .output()
+        .with_context(|| format!("Failed to run git diff {older} {newer}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("git diff failed for {older}..{newer}: {stderr}");
+    }
+
+    let diff = String::from_utf8_lossy(&output.stdout).to_string();
+    if diff.trim().is_empty() {
+        bail!("No diff found for range {older}..{newer}");
+    }
+    Ok(diff)
+}
+
+pub fn is_head_commit(commit: &str) -> Result<bool> {
+    ensure_commit_exists(commit)?;
+    Ok(resolve_commit("HEAD")? == resolve_commit(commit)?)
+}
+
+pub fn commit_is_merge(commit: &str) -> Result<bool> {
+    ensure_commit_exists(commit)?;
+    let output = Command::new("git")
+        .args(["rev-list", "--parents", "-n", "1", commit])
+        .output()
+        .with_context(|| format!("Failed to inspect parents for {commit}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("git rev-list failed for {commit}: {stderr}");
+    }
+
+    let parent_count = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .count()
+        .saturating_sub(1);
+    Ok(parent_count > 1)
+}
+
+pub fn commit_is_pushed(commit: &str) -> Result<bool> {
+    ensure_commit_exists(commit)?;
+    if !has_upstream_branch()? {
+        return Ok(false);
+    }
+
+    let output = Command::new("git")
+        .args(["branch", "-r", "--contains", commit])
+        .output()
+        .with_context(|| format!("Failed to determine whether {commit} is pushed"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("git branch -r --contains {commit} failed: {stderr}");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout
+        .lines()
+        .map(str::trim)
+        .any(|line| !line.is_empty() && !line.contains("->")))
+}
+
+pub fn rewrite_commit_message(target: &str, message: &str, suppress_output: bool) -> Result<()> {
+    ensure_commit_exists(target)?;
+
+    if is_head_commit(target)? {
+        let mut cmd = Command::new("git");
+        cmd.args(["commit", "--amend", "-m", message]);
+        configure_stdio(&mut cmd, suppress_output);
+        let status = cmd.status().context("Failed to run git commit --amend")?;
+        if !status.success() {
+            bail!("git commit --amend exited with status {status}");
+        }
+        return Ok(());
+    }
+
+    if commit_is_merge(target)? {
+        bail!("Altering non-HEAD merge commits is not supported.");
+    }
+
+    ensure_ancestor_of_head(target)?;
+    reword_non_head_commit(target, message, suppress_output)
+}
+
+fn resolve_commit(commit: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--verify", &format!("{commit}^{{commit}}")])
+        .output()
+        .with_context(|| format!("Failed to resolve commit {commit}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("Failed to resolve commit {commit}: {stderr}");
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn ensure_ancestor_of_head(commit: &str) -> Result<()> {
+    let status = Command::new("git")
+        .args(["merge-base", "--is-ancestor", commit, "HEAD"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .with_context(|| format!("Failed to check whether {commit} is an ancestor of HEAD"))?;
+
+    if !status.success() {
+        bail!("Target commit must be on the current branch and reachable from HEAD.");
+    }
+    Ok(())
+}
+
+fn reword_non_head_commit(target: &str, message: &str, suppress_output: bool) -> Result<()> {
+    let parent = format!("{target}^");
+    let temp = std::env::temp_dir();
+    let sequence_editor = temp.join(format!("cgen-seq-editor-{}.sh", std::process::id()));
+    let message_editor = temp.join(format!("cgen-msg-editor-{}.sh", std::process::id()));
+
+    write_sequence_editor_script(&sequence_editor)?;
+    write_message_editor_script(&message_editor)?;
+
+    let mut cmd = Command::new("git");
+    cmd.args(["rebase", "-i", &parent]);
+    cmd.env("GIT_SEQUENCE_EDITOR", script_command(&sequence_editor));
+    cmd.env("GIT_EDITOR", script_command(&message_editor));
+    cmd.env("CGEN_NEW_MESSAGE", message);
+    configure_stdio(&mut cmd, suppress_output);
+
+    let status = cmd.status().context("Failed to run git rebase -i")?;
+
+    let _ = fs::remove_file(&sequence_editor);
+    let _ = fs::remove_file(&message_editor);
+
+    if !status.success() {
+        bail!(
+            "Rewriting commit message failed during rebase. Resolve conflicts and run `git rebase --abort` if needed."
+        );
+    }
+    Ok(())
+}
+
+fn write_sequence_editor_script(path: &Path) -> Result<()> {
+    let script = r#"#!/bin/sh
+set -e
+todo="$1"
+tmp="${todo}.cgen"
+first=1
+
+while IFS= read -r line; do
+  if [ "$first" -eq 1 ] && printf '%s\n' "$line" | grep -q '^pick '; then
+    printf '%s\n' "$line" | sed 's/^pick /reword /' >> "$tmp"
+    first=0
+  else
+    printf '%s\n' "$line" >> "$tmp"
+  fi
+done < "$todo"
+
+mv "$tmp" "$todo"
+"#;
+    fs::write(path, script).with_context(|| format!("Failed to write {:?}", path))?;
+    make_executable(path)?;
+    Ok(())
+}
+
+fn write_message_editor_script(path: &Path) -> Result<()> {
+    let script = r#"#!/bin/sh
+set -e
+msg_file="$1"
+printf '%s\n' "$CGEN_NEW_MESSAGE" > "$msg_file"
+"#;
+    fs::write(path, script).with_context(|| format!("Failed to write {:?}", path))?;
+    make_executable(path)?;
+    Ok(())
+}
+
+fn make_executable(path: &Path) -> Result<()> {
+    #[cfg(not(unix))]
+    let _ = path;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path)?.permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(path, perms)?;
+    }
+    Ok(())
+}
+
+fn script_command(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
