@@ -57,25 +57,11 @@ pub fn parse() -> Cli {
     Cli::parse()
 }
 
-/// Menu entry types for the grouped interactive config
-enum MenuEntry {
-    GroupHeader {
-        name: &'static str,
-        expanded: bool,
-    },
-    SubgroupHeader {
-        name: &'static str,
-        is_last_subgroup: bool,
-    },
-    Field {
-        display_name: &'static str,
-        suffix: &'static str,
-        value: String,
-        is_last_in_group: bool,
-        in_subgroup: bool,
-        parent_is_last_subgroup: bool,
-        is_last_in_subgroup: bool,
-    },
+/// What happens when a menu entry is selected
+enum MenuAction {
+    ToggleGroup(&'static str),
+    ToggleSubgroup(&'static str),
+    EditField(&'static str),
 }
 
 pub fn interactive_config(global: bool) -> Result<()> {
@@ -86,134 +72,88 @@ pub fn interactive_config(global: bool) -> Result<()> {
 
     let mut expanded: HashSet<&str> = HashSet::new();
     expanded.insert("Basic");
+
+    // Track what was last toggled so the cursor can stay on it after redraw
+    let mut cursor_target: Option<&str> = None;
     let mut first_render = true;
 
     loop {
-        // Clear screen and re-home cursor for in-place redraw
         if first_render {
             first_render = false;
         } else {
+            // Clear screen and reprint header for in-place redraw
             print!("\x1B[2J\x1B[H");
             println!("\n{}  {} configuration\n", "cgen".cyan().bold(), scope);
         }
 
         let groups = cfg.grouped_fields();
-        let mut entries: Vec<MenuEntry> = Vec::new();
+        let mut actions: Vec<MenuAction> = Vec::new();
+        let mut labels: Vec<String> = Vec::new();
 
         for group in &groups {
-            let is_expanded = expanded.contains(group.name);
-            entries.push(MenuEntry::GroupHeader {
-                name: group.name,
-                expanded: is_expanded,
-            });
+            let group_open = expanded.contains(group.name);
+            let arrow = if group_open { "\u{25BC}" } else { "\u{25B6}" };
+            labels.push(format!("{} {}", arrow, group.name.bold()));
+            actions.push(MenuAction::ToggleGroup(group.name));
 
-            if is_expanded {
-                let has_subgroups = !group.subgroups.is_empty();
+            if !group_open {
+                continue;
+            }
 
-                for (i, (display_name, suffix, val)) in group.fields.iter().enumerate() {
-                    let is_last = !has_subgroups && i == group.fields.len() - 1;
-                    entries.push(MenuEntry::Field {
-                        display_name,
-                        suffix,
-                        value: val.clone(),
-                        is_last_in_group: is_last,
-                        in_subgroup: false,
-                        parent_is_last_subgroup: false,
-                        is_last_in_subgroup: false,
-                    });
+            // Direct fields under the group (Basic)
+            let has_subgroups = !group.subgroups.is_empty();
+            for (i, (display_name, suffix, val)) in group.fields.iter().enumerate() {
+                let is_last = !has_subgroups && i == group.fields.len() - 1;
+                let conn = if is_last { "\u{2514}\u{2500}\u{2500}" } else { "\u{251C}\u{2500}\u{2500}" };
+                labels.push(format!("  {} {:<22} {}", conn, display_name, val.dimmed()));
+                actions.push(MenuAction::EditField(suffix));
+            }
+
+            // Subgroups (Advanced)
+            for (sg_idx, sg) in group.subgroups.iter().enumerate() {
+                let is_last_sg = sg_idx == group.subgroups.len() - 1;
+                let sg_open = expanded.contains(sg.name);
+                let sg_arrow = if sg_open { "\u{25BC}" } else { "\u{25B6}" };
+                let sg_conn = if is_last_sg { "\u{2514}\u{2500}\u{2500}" } else { "\u{251C}\u{2500}\u{2500}" };
+                labels.push(format!("  {} {} {}", sg_conn, sg_arrow, sg.name.bold().dimmed()));
+                actions.push(MenuAction::ToggleSubgroup(sg.name));
+
+                if !sg_open {
+                    continue;
                 }
 
-                for (sg_idx, sg) in group.subgroups.iter().enumerate() {
-                    let is_last_sg = sg_idx == group.subgroups.len() - 1;
-                    entries.push(MenuEntry::SubgroupHeader {
-                        name: sg.name,
-                        is_last_subgroup: is_last_sg,
-                    });
-                    for (f_idx, (display_name, suffix, val)) in sg.fields.iter().enumerate() {
-                        let is_last_field = f_idx == sg.fields.len() - 1;
-                        entries.push(MenuEntry::Field {
-                            display_name,
-                            suffix,
-                            value: val.clone(),
-                            is_last_in_group: is_last_sg && is_last_field,
-                            in_subgroup: true,
-                            parent_is_last_subgroup: is_last_sg,
-                            is_last_in_subgroup: is_last_field,
-                        });
-                    }
+                // Fields inside the subgroup, indented one level deeper
+                let pipe = if is_last_sg { " " } else { "\u{2502}" };
+                for (f_idx, (display_name, suffix, val)) in sg.fields.iter().enumerate() {
+                    let is_last_field = f_idx == sg.fields.len() - 1;
+                    let f_conn = if is_last_field { "\u{2514}\u{2500}\u{2500}" } else { "\u{251C}\u{2500}\u{2500}" };
+                    labels.push(format!(
+                        "  {}   {} {:<22} {}",
+                        pipe, f_conn, display_name, val.dimmed()
+                    ));
+                    actions.push(MenuAction::EditField(suffix));
                 }
             }
         }
 
-        let options: Vec<String> = entries
-            .iter()
-            .map(|entry| match entry {
-                MenuEntry::GroupHeader { name, expanded } => {
-                    let arrow = if *expanded { "\u{25BC}" } else { "\u{25B6}" };
-                    format!("{} {}", arrow, name.bold())
-                }
-                MenuEntry::SubgroupHeader {
-                    name,
-                    is_last_subgroup,
-                } => {
-                    let connector = if *is_last_subgroup {
-                        "\u{2514}\u{2500}\u{2500}"
-                    } else {
-                        "\u{251C}\u{2500}\u{2500}"
-                    };
-                    format!("  {} {}", connector, name.bold().dimmed())
-                }
-                MenuEntry::Field {
-                    display_name,
-                    value,
-                    in_subgroup,
-                    parent_is_last_subgroup,
-                    is_last_in_subgroup,
-                    is_last_in_group,
-                    ..
-                } => {
-                    if *in_subgroup {
-                        // Indent deeper under subgroup, with continuation line from parent
-                        let pipe = if *parent_is_last_subgroup {
-                            " "
-                        } else {
-                            "\u{2502}"
-                        };
-                        let connector = if *is_last_in_subgroup {
-                            "\u{2514}\u{2500}\u{2500}"
-                        } else {
-                            "\u{251C}\u{2500}\u{2500}"
-                        };
-                        format!(
-                            "  {}   {} {:<22} {}",
-                            pipe,
-                            connector,
-                            display_name,
-                            value.dimmed()
-                        )
-                    } else {
-                        let connector = if *is_last_in_group {
-                            "\u{2514}\u{2500}\u{2500}"
-                        } else {
-                            "\u{251C}\u{2500}\u{2500}"
-                        };
-                        format!(
-                            "  {} {:<22} {}",
-                            connector,
-                            display_name,
-                            value.dimmed()
-                        )
-                    }
-                }
+        // Resolve starting cursor position from previous toggle target
+        let starting_cursor = cursor_target
+            .and_then(|target| {
+                actions.iter().position(|a| matches!(
+                    a,
+                    MenuAction::ToggleGroup(n) | MenuAction::ToggleSubgroup(n) if *n == target
+                ))
             })
-            .collect();
+            .unwrap_or(0);
+        cursor_target = None;
 
-        let mut all_options = options.clone();
-        all_options.push("Save & Exit".green().to_string());
-        all_options.push("Exit without saving".red().to_string());
+        let mut all_labels = labels.clone();
+        all_labels.push("Save & Exit".green().to_string());
+        all_labels.push("Exit without saving".red().to_string());
 
-        let selection = Select::new("Edit a setting:", all_options)
+        let selection = Select::new("Edit a setting:", all_labels)
             .with_page_size(22)
+            .with_starting_cursor(starting_cursor)
             .prompt();
 
         let selection = match selection {
@@ -239,26 +179,37 @@ pub fn interactive_config(global: bool) -> Result<()> {
             break;
         }
 
-        // Find which entry was selected
-        let idx = options.iter().position(|o| selection.contains(o.as_str()));
+        let idx = labels.iter().position(|l| selection.contains(l.as_str()));
         let idx = match idx {
             Some(i) => i,
             None => continue,
         };
 
-        match &entries[idx] {
-            MenuEntry::GroupHeader { name, expanded: is_expanded } => {
-                if *is_expanded {
+        match &actions[idx] {
+            MenuAction::ToggleGroup(name) => {
+                if expanded.contains(name) {
+                    expanded.remove(name);
+                    // Also collapse child subgroups
+                    let groups = cfg.grouped_fields();
+                    if let Some(g) = groups.iter().find(|g| g.name == *name) {
+                        for sg in &g.subgroups {
+                            expanded.remove(sg.name);
+                        }
+                    }
+                } else {
+                    expanded.insert(name);
+                }
+                cursor_target = Some(name);
+            }
+            MenuAction::ToggleSubgroup(name) => {
+                if expanded.contains(name) {
                     expanded.remove(name);
                 } else {
                     expanded.insert(name);
                 }
-                continue;
+                cursor_target = Some(name);
             }
-            MenuEntry::SubgroupHeader { .. } => {
-                continue;
-            }
-            MenuEntry::Field { suffix, .. } => {
+            MenuAction::EditField(suffix) => {
                 let new_value = edit_field(suffix, &cfg);
                 if let Some(val) = new_value {
                     if let Err(err) = cfg.set_field(suffix, &val) {
