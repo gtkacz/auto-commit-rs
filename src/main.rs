@@ -337,7 +337,7 @@ fn handle_post_commit_push(cfg: &config::AppConfig, ask_prompt: &str) -> Result<
 fn prompt_auto_update() {
     let answer = Confirm::new("Would you like to enable automatic updates for cgen?")
         .with_default(true)
-        .with_help_message("You can change this later with `cgen config --global`")
+        .with_help_message("You can change this later with `cgen config`")
         .prompt();
 
     match answer {

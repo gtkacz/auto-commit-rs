@@ -44,7 +44,7 @@ cargo build
 cargo run
 
 # Run with arguments
-cargo run -- config --global
+cargo run -- config
 
 # Release build (slow compilation, optimized binary)
 cargo build --release
@@ -78,8 +78,8 @@ cargo run
 To test the interactive config menu:
 
 ```sh
-cargo run -- config          # Local .env editor
-cargo run -- config --global # Global TOML editor
+cargo run -- config          # Inside a repo: choose local (.env) or global (TOML)
+cargo run -- config          # Outside a repo: opens global TOML directly
 ```
 
 To test new commit workflow controls:
