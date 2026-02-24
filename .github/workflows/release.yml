@@ -1,9 +1,15 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release"
+        required: true
+        default: "latest"
   push:
     tags:
-      - "v*"
+      - "*.*.*"
 
 permissions:
   contents: write
