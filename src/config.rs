@@ -43,6 +43,8 @@ pub struct AppConfig {
     pub warn_staged_files_threshold: usize,
     #[serde(default = "default_true")]
     pub confirm_new_version: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_update: Option<bool>,
 }
 
 fn default_provider() -> String {
@@ -93,6 +95,7 @@ impl Default for AppConfig {
             warn_staged_files_enabled: true,
             warn_staged_files_threshold: default_warn_staged_files_threshold(),
             confirm_new_version: true,
+            auto_update: None,
         }
     }
 }
@@ -116,6 +119,7 @@ const ENV_FIELD_MAP: &[(&str, &str)] = &[
     ("WARN_STAGED_FILES_ENABLED", "warn_staged_files_enabled"),
     ("WARN_STAGED_FILES_THRESHOLD", "warn_staged_files_threshold"),
     ("CONFIRM_NEW_VERSION", "confirm_new_version"),
+    ("AUTO_UPDATE", "auto_update"),
 ];
 
 impl AppConfig {
@@ -195,6 +199,9 @@ impl AppConfig {
         self.warn_staged_files_enabled = other.warn_staged_files_enabled;
         self.warn_staged_files_threshold = other.warn_staged_files_threshold;
         self.confirm_new_version = other.confirm_new_version;
+        if other.auto_update.is_some() {
+            self.auto_update = other.auto_update;
+        }
     }
 
     fn apply_env_map(&mut self, map: &HashMap<String, String>) {
@@ -232,6 +239,10 @@ impl AppConfig {
                     }
                     "CONFIRM_NEW_VERSION" => {
                         self.confirm_new_version = val == "1" || val.eq_ignore_ascii_case("true")
+                    }
+                    "AUTO_UPDATE" => {
+                        self.auto_update =
+                            Some(val == "1" || val.eq_ignore_ascii_case("true"));
                     }
                     _ => {}
                 }
@@ -313,6 +324,12 @@ impl AppConfig {
             "ACR_CONFIRM_NEW_VERSION={}",
             if self.confirm_new_version { "1" } else { "0" }
         ));
+        if let Some(auto_update) = self.auto_update {
+            lines.push(format!(
+                "ACR_AUTO_UPDATE={}",
+                if auto_update { "1" } else { "0" }
+            ));
+        }
 
         std::fs::write(&env_path, lines.join("\n") + "\n")
             .with_context(|| format!("Failed to write {}", env_path.display()))?;
@@ -431,6 +448,15 @@ impl AppConfig {
                     "0 (no)".into()
                 },
             ),
+            (
+                "Auto Update",
+                "AUTO_UPDATE",
+                match self.auto_update {
+                    Some(true) => "1 (yes)".into(),
+                    Some(false) => "0 (no)".into(),
+                    None => "(not set)".into(),
+                },
+            ),
         ]
     }
 
@@ -469,6 +495,9 @@ impl AppConfig {
             "CONFIRM_NEW_VERSION" => {
                 self.confirm_new_version = value == "1" || value.eq_ignore_ascii_case("true");
             }
+            "AUTO_UPDATE" => {
+                self.auto_update = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+            }
             _ => {}
         }
         Ok(())
@@ -489,6 +518,31 @@ pub fn global_config_path() -> Option<PathBuf> {
         }
     }
     dirs::config_dir().map(|d| d.join("cgen").join("config.toml"))
+}
+
+/// Save only the auto_update preference to global config without overwriting other fields
+pub fn save_auto_update_preference(value: bool) -> Result<()> {
+    let path = global_config_path().context("Could not determine global config directory")?;
+
+    let mut table: toml::Table = if path.exists() {
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        content.parse().unwrap_or_default()
+    } else {
+        toml::Table::new()
+    };
+
+    table.insert("auto_update".to_string(), toml::Value::Boolean(value));
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    }
+
+    let content = toml::to_string_pretty(&table).context("Failed to serialize config")?;
+    std::fs::write(&path, content)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(())
 }
 
 fn mask_key(key: &str) -> String {

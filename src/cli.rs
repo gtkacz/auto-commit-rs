@@ -49,6 +49,8 @@ pub enum Command {
         #[arg(value_name = "HASH", num_args = 1..=2)]
         commits: Vec<String>,
     },
+    /// Update cgen to the latest version
+    Update,
 }
 
 pub fn parse() -> Cli {
@@ -73,7 +75,7 @@ pub fn interactive_config(global: bool) -> Result<()> {
         all_options.push("Exit without saving".red().to_string());
 
         let selection = Select::new("Edit a setting:", all_options)
-            .with_page_size(17)
+            .with_page_size(18)
             .prompt();
 
         let selection = match selection {
@@ -177,6 +179,13 @@ pub fn interactive_config(global: bool) -> Result<()> {
             "CONFIRM_NEW_VERSION" => {
                 let choices = vec!["1 (yes)", "0 (no)"];
                 Select::new("Confirm new semantic version tag:", choices)
+                    .prompt()
+                    .ok()
+                    .map(|v| v.chars().next().unwrap().to_string())
+            }
+            "AUTO_UPDATE" => {
+                let choices = vec!["1 (yes)", "0 (no)"];
+                Select::new("Enable automatic updates:", choices)
                     .prompt()
                     .ok()
                     .map(|v| v.chars().next().unwrap().to_string())

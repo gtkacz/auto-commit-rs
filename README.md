@@ -92,6 +92,7 @@ cgen --no-verify        # Forward flags to git commit
 cgen alter <hash>       # Regenerate message from that commit's diff and rewrite it
 cgen alter <old> <new>  # Use old..new net diff, rewrite <new> message
 cgen undo               # Undo latest commit with safety prompts (soft reset)
+cgen update             # Update cgen to the latest version
 cgen config             # Interactive config editor (local .env)
 cgen config --global    # Interactive config editor (global TOML)
 ```
@@ -121,6 +122,7 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 | `ACR_WARN_STAGED_FILES_ENABLED` | `1` | Warn when staged file count exceeds threshold (`1`/`0`) |
 | `ACR_WARN_STAGED_FILES_THRESHOLD` | `20` | Staged files warning threshold (warn when count is greater) |
 | `ACR_CONFIRM_NEW_VERSION` | `1` | Ask before creating the computed `--tag` version (`1`/`0`) |
+| `ACR_AUTO_UPDATE` | — | Enable automatic updates (`1`/`0`); prompts on first run if unset |
 
 ### Config Locations
 
@@ -156,6 +158,17 @@ ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
   - `always`: push automatically
 - For rewritten pushed history, cgen does not auto-force-push; use manual `git push --force-with-lease` if needed.
 - `cgen undo` only undoes the latest commit (`git reset --soft HEAD~1`), never pushes, and warns before undoing pushed commits.
+
+### Updating
+
+- `cgen update` checks for a newer version on GitHub and runs the appropriate installer:
+  - If `cargo` is available: `cargo install auto-commit-rs`
+  - Otherwise on Linux/macOS: re-runs the curl install script
+  - Otherwise on Windows: re-runs the PowerShell install script
+- On every run, cgen checks the latest GitHub release tag against the current version.
+- The first time cgen runs, it asks whether to enable automatic updates and saves the preference to the global config.
+- If `ACR_AUTO_UPDATE=1`, cgen automatically updates when a newer version is found.
+- If `ACR_AUTO_UPDATE=0` (or unset after the prompt), a warning is shown at the end of the output with the available version.
 
 ## Providers
 

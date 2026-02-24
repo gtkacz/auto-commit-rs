@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use auto_commit_rs::{cli, config, git, prompt, provider};
+use auto_commit_rs::{cli, config, git, prompt, provider, update};
 use colored::Colorize;
 use inquire::{Confirm, Select, Text};
 
@@ -13,13 +13,29 @@ fn main() {
 fn run() -> Result<()> {
     let cli = cli::parse();
     let cfg = match &cli.command {
-        Some(cli::Command::Config { .. }) => None,
+        Some(cli::Command::Config { .. }) | Some(cli::Command::Update) => None,
         _ => Some(config::AppConfig::load()?),
+    };
+
+    // On first run, ask about auto-update preference
+    if let Some(ref c) = cfg {
+        if c.auto_update.is_none() {
+            prompt_auto_update();
+        }
+    }
+
+    // Check for updates (except for config/update commands)
+    let update_warning = match &cli.command {
+        Some(cli::Command::Config { .. }) | Some(cli::Command::Update) => None,
+        _ => check_for_updates(cfg.as_ref()),
     };
 
     match &cli.command {
         Some(cli::Command::Config { global }) => {
             cli::interactive_config(*global)?;
+        }
+        Some(cli::Command::Update) => {
+            run_update_command()?;
         }
         Some(cli::Command::Undo) => {
             run_undo(cfg.as_ref().expect("config should be loaded"))?;
@@ -34,6 +50,11 @@ fn run() -> Result<()> {
         None => {
             run_standard_commit(cfg.as_ref().expect("config should be loaded"), &cli)?;
         }
+    }
+
+    // Show update warning at the end so it doesn't get buried
+    if let Some(latest) = update_warning {
+        update::print_update_warning(&latest);
     }
 
     Ok(())
@@ -296,6 +317,101 @@ fn handle_post_commit_push(cfg: &config::AppConfig, ask_prompt: &str) -> Result<
             if should_push {
                 git::run_push(cfg.suppress_tool_output).context("git push failed")?;
             }
+        }
+    }
+    Ok(())
+}
+
+fn prompt_auto_update() {
+    let answer = Confirm::new("Would you like to enable automatic updates for cgen?")
+        .with_default(true)
+        .with_help_message("You can change this later with `cgen config --global`")
+        .prompt();
+
+    match answer {
+        Ok(yes) => {
+            if let Err(e) = config::save_auto_update_preference(yes) {
+                eprintln!(
+                    "{} Failed to save auto-update preference: {}",
+                    "warning:".yellow().bold(),
+                    e
+                );
+            } else {
+                let status = if yes { "enabled" } else { "disabled" };
+                println!(
+                    "{} Auto-updates {}.\n",
+                    "done!".green().bold(),
+                    status
+                );
+            }
+        }
+        Err(_) => {
+            // User cancelled - leave as None, will ask again next time
+        }
+    }
+}
+
+/// Check for updates and either auto-update or return the latest version for a warning.
+/// Returns Some(latest_version) if a warning should be shown, None otherwise.
+fn check_for_updates(cfg: Option<&config::AppConfig>) -> Option<String> {
+    let version_check = match update::check_version() {
+        Ok(v) => v,
+        Err(_) => return None, // silently ignore network errors
+    };
+
+    if !version_check.update_available {
+        return None;
+    }
+
+    let auto_update = cfg.and_then(|c| c.auto_update).unwrap_or(false);
+
+    if auto_update {
+        println!(
+            "{} {} → {}",
+            "Auto-updating cgen...".cyan().bold(),
+            version_check.current.dimmed(),
+            version_check.latest.green(),
+        );
+        if let Err(e) = update::run_update() {
+            eprintln!(
+                "{} Auto-update failed: {}",
+                "warning:".yellow().bold(),
+                e
+            );
+            return Some(version_check.latest);
+        }
+        println!(
+            "{} Restart cgen to use the new version.\n",
+            "note:".yellow().bold()
+        );
+        return None;
+    }
+
+    Some(version_check.latest)
+}
+
+fn run_update_command() -> Result<()> {
+    println!("{}", "Checking for updates...".cyan().bold());
+
+    match update::check_version() {
+        Ok(v) if v.update_available => {
+            println!(
+                "{} {} → {}",
+                "New version available!".green().bold(),
+                v.current.dimmed(),
+                v.latest.green(),
+            );
+            update::run_update()?;
+        }
+        Ok(v) => {
+            println!(
+                "{} You are already on the latest version ({}).",
+                "Up to date!".green().bold(),
+                v.current,
+            );
+        }
+        Err(e) => {
+            anyhow::bail!("Failed to check for updates: {}", e);
         }
     }
     Ok(())

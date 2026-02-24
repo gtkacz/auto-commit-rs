@@ -4,3 +4,4 @@ pub mod git;
 pub mod interpolation;
 pub mod prompt;
 pub mod provider;
+pub mod update;
