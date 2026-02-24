@@ -77,7 +77,9 @@ cgen
 
 ```
 cgen                    # Generate commit message and commit
+cgen --dry-run          # Generate and show message without committing
 cgen --no-verify        # Forward flags to git commit
+cgen undo               # Undo latest commit with safety prompts (soft reset)
 cgen config             # Interactive config editor (local .env)
 cgen config --global    # Interactive config editor (global TOML)
 ```
@@ -102,6 +104,10 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 | `ACR_USE_GITMOJI` | `0` | Enable gitmoji (`1`/`0`) |
 | `ACR_GITMOJI_FORMAT` | `unicode` | Gitmoji style (`unicode`/`shortcode`) |
 | `ACR_REVIEW_COMMIT` | `0` | Review message before committing (`1`/`0`) |
+| `ACR_POST_COMMIT_PUSH` | `ask` | Post-commit push behavior (`never`/`ask`/`always`) |
+| `ACR_SUPPRESS_TOOL_OUTPUT` | `0` | Suppress git subprocess output (`1`/`0`) |
+| `ACR_WARN_STAGED_FILES_ENABLED` | `1` | Warn when staged file count exceeds threshold (`1`/`0`) |
+| `ACR_WARN_STAGED_FILES_THRESHOLD` | `20` | Staged files warning threshold (warn when count is greater) |
 
 ### Config Locations
 
@@ -116,6 +122,17 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 ACR_API_URL=https://api.example.com/v1/$ACR_MODEL/chat
 ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
 ```
+
+### Safety and Workflow Controls
+
+- `cgen` now prints staged file count and names before generating a commit message.
+- If staged files exceed `ACR_WARN_STAGED_FILES_THRESHOLD` and warnings are enabled, cgen asks for confirmation before continuing.
+- `cgen --dry-run` generates and prints the final commit message but does not create a commit.
+- After a real commit, push behavior follows `ACR_POST_COMMIT_PUSH`:
+  - `never`: never push
+  - `ask`: prompt whether to push (default)
+  - `always`: push automatically
+- `cgen undo` only undoes the latest commit (`git reset --soft HEAD~1`), never pushes, and warns before undoing pushed commits.
 
 ## Providers
 

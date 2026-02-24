@@ -16,6 +16,10 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
 
+    /// Generate and print commit message without creating a commit
+    #[arg(long)]
+    pub dry_run: bool,
+
     /// Extra arguments forwarded to `git commit`
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
@@ -29,6 +33,8 @@ pub enum Command {
         #[arg(long, short)]
         global: bool,
     },
+    /// Undo latest commit (soft reset)
+    Undo,
 }
 
 pub fn parse() -> Cli {
@@ -39,11 +45,7 @@ pub fn interactive_config(global: bool) -> Result<()> {
     let mut cfg = AppConfig::load().unwrap_or_default();
     let scope = if global { "global" } else { "local" };
 
-    println!(
-        "\n{}  {} configuration\n",
-        "cgen".cyan().bold(),
-        scope
-    );
+    println!("\n{}  {} configuration\n", "cgen".cyan().bold(), scope);
 
     loop {
         let fields = cfg.fields_display();
@@ -57,7 +59,7 @@ pub fn interactive_config(global: bool) -> Result<()> {
         all_options.push("Exit without saving".red().to_string());
 
         let selection = Select::new("Edit a setting:", all_options)
-            .with_page_size(13)
+            .with_page_size(17)
             .prompt();
 
         let selection = match selection {
@@ -98,9 +100,7 @@ pub fn interactive_config(global: bool) -> Result<()> {
             "PROVIDER" => {
                 let choices = vec!["gemini", "openai", "anthropic", "groq", "(custom)"];
                 match Select::new("Provider:", choices).prompt() {
-                    Ok("(custom)") => {
-                        Text::new("Custom provider name:").prompt().ok()
-                    }
+                    Ok("(custom)") => Text::new("Custom provider name:").prompt().ok(),
                     Ok(v) => Some(v.to_string()),
                     Err(_) => None,
                 }
@@ -133,19 +133,41 @@ pub fn interactive_config(global: bool) -> Result<()> {
                     .ok()
                     .map(|v| v.chars().next().unwrap().to_string())
             }
-            "API_KEY" => {
-                Text::new("API Key:")
-                    .with_help_message("Your LLM provider API key")
+            "POST_COMMIT_PUSH" => {
+                let choices = vec!["ask", "always", "never"];
+                Select::new("Post-commit push behavior:", choices)
                     .prompt()
                     .ok()
+                    .map(|v| v.to_string())
             }
+            "SUPPRESS_TOOL_OUTPUT" => {
+                let choices = vec!["0 (no)", "1 (yes)"];
+                Select::new("Suppress git command output:", choices)
+                    .prompt()
+                    .ok()
+                    .map(|v| v.chars().next().unwrap().to_string())
+            }
+            "WARN_STAGED_FILES_ENABLED" => {
+                let choices = vec!["1 (yes)", "0 (no)"];
+                Select::new("Warn when staged files exceed threshold:", choices)
+                    .prompt()
+                    .ok()
+                    .map(|v| v.chars().next().unwrap().to_string())
+            }
+            "WARN_STAGED_FILES_THRESHOLD" => Text::new("Warn threshold (staged files count):")
+                .with_help_message(
+                    "Integer value; warning shows when count is greater than this threshold",
+                )
+                .prompt()
+                .ok(),
+            "API_KEY" => Text::new("API Key:")
+                .with_help_message("Your LLM provider API key")
+                .prompt()
+                .ok(),
             _ => {
                 let current = fields[idx].2.clone();
                 let prompt_text = format!("{}:", fields[idx].0);
-                Text::new(&prompt_text)
-                    .with_default(&current)
-                    .prompt()
-                    .ok()
+                Text::new(&prompt_text).with_default(&current).prompt().ok()
             }
         };
 
@@ -157,9 +179,16 @@ pub fn interactive_config(global: bool) -> Result<()> {
                 let default_model = crate::provider::default_model_for(&val);
                 cfg.set_field("MODEL", default_model);
                 if default_model.is_empty() {
-                    println!("  {} Model cleared (set it manually)", "note:".yellow().bold());
+                    println!(
+                        "  {} Model cleared (set it manually)",
+                        "note:".yellow().bold()
+                    );
                 } else {
-                    println!("  {} Model set to {}", "note:".yellow().bold(), default_model.dimmed());
+                    println!(
+                        "  {} Model set to {}",
+                        "note:".yellow().bold(),
+                        default_model.dimmed()
+                    );
                 }
             }
         }

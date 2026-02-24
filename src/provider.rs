@@ -94,37 +94,43 @@ pub fn call_llm(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<Stri
 
     spinner.finish_and_clear();
 
-    let response = response.map_err(|e| {
-        match e {
-            ureq::Error::Status(code, resp) => {
-                let body = resp.into_string().unwrap_or_default();
-                anyhow::anyhow!("API returned HTTP {code}: {body}")
-            }
-            ureq::Error::Transport(t) => {
-                anyhow::anyhow!("Network error: {t}")
-            }
+    let response = response.map_err(|e| match e {
+        ureq::Error::Status(code, resp) => {
+            let body = resp.into_string().unwrap_or_default();
+            anyhow::anyhow!("API returned HTTP {code}: {body}")
+        }
+        ureq::Error::Transport(t) => {
+            anyhow::anyhow!("Network error: {t}")
         }
     })?;
 
-    let json: Value = response.into_json()
+    let json: Value = response
+        .into_json()
         .context("Failed to parse API response as JSON")?;
 
-    let message = extract_by_path(&json, &response_path)
-        .with_context(|| {
-            format!(
-                "Failed to extract message from response at path '{}'. Response:\n{}",
-                response_path,
-                serde_json::to_string_pretty(&json).unwrap_or_default()
-            )
-        })?;
+    let message = extract_by_path(&json, &response_path).with_context(|| {
+        format!(
+            "Failed to extract message from response at path '{}'. Response:\n{}",
+            response_path,
+            serde_json::to_string_pretty(&json).unwrap_or_default()
+        )
+    })?;
 
     Ok(message)
 }
 
 fn resolve_provider(cfg: &AppConfig) -> Result<(String, String, RequestFormat, String)> {
     if let Some(def) = get_provider(&cfg.provider) {
-        let url = if cfg.api_url.is_empty() { def.api_url.to_string() } else { cfg.api_url.clone() };
-        let headers = if cfg.api_headers.is_empty() { def.api_headers.to_string() } else { cfg.api_headers.clone() };
+        let url = if cfg.api_url.is_empty() {
+            def.api_url.to_string()
+        } else {
+            cfg.api_url.clone()
+        };
+        let headers = if cfg.api_headers.is_empty() {
+            def.api_headers.to_string()
+        } else {
+            cfg.api_headers.clone()
+        };
         Ok((url, headers, def.format, def.response_path.to_string()))
     } else {
         // Custom provider: require API URL, default to OpenAI-compatible format
@@ -144,7 +150,12 @@ fn resolve_provider(cfg: &AppConfig) -> Result<(String, String, RequestFormat, S
     }
 }
 
-fn build_request_body(format: RequestFormat, model: &str, system_prompt: &str, diff: &str) -> Value {
+fn build_request_body(
+    format: RequestFormat,
+    model: &str,
+    system_prompt: &str,
+    diff: &str,
+) -> Value {
     match format {
         RequestFormat::Gemini => {
             serde_json::json!({
@@ -192,9 +203,8 @@ fn parse_headers(raw: &str) -> Vec<(String, String)> {
     raw.split(',')
         .filter_map(|pair| {
             let pair = pair.trim();
-            pair.split_once(':').map(|(k, v)| {
-                (k.trim().to_string(), v.trim().to_string())
-            })
+            pair.split_once(':')
+                .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
         })
         .collect()
 }
@@ -204,10 +214,12 @@ fn extract_by_path(value: &Value, path: &str) -> Result<String> {
     let mut current = value;
     for segment in path.split('.') {
         current = if let Ok(index) = segment.parse::<usize>() {
-            current.get(index)
+            current
+                .get(index)
                 .with_context(|| format!("Array index {index} out of bounds"))?
         } else {
-            current.get(segment)
+            current
+                .get(segment)
                 .with_context(|| format!("Key '{segment}' not found"))?
         };
     }

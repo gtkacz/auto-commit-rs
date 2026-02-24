@@ -43,11 +43,17 @@ pub fn build_system_prompt(cfg: &AppConfig) -> String {
 
     // Locale
     if cfg.locale != "en" {
-        parts.push(format!("Write the commit message in the '{}' locale.", cfg.locale));
+        parts.push(format!(
+            "Write the commit message in the '{}' locale.",
+            cfg.locale
+        ));
     }
 
     // Universal closing instructions
-    parts.push("Use present tense. Be concise. Output only the raw commit message, nothing else.".to_string());
+    parts.push(
+        "Use present tense. Be concise. Output only the raw commit message, nothing else."
+            .to_string(),
+    );
 
     parts.join("\n\n")
 }

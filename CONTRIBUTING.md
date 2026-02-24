@@ -82,6 +82,23 @@ cargo run -- config          # Local .env editor
 cargo run -- config --global # Global TOML editor
 ```
 
+To test new commit workflow controls:
+
+```sh
+# Dry run (should NOT create a commit)
+cargo run -- --dry-run
+
+# Undo latest commit (soft reset, keeps changes staged)
+cargo run -- undo
+```
+
+Suggested manual smoke checks:
+- `ACR_POST_COMMIT_PUSH=never|ask|always` behavior after commit creation
+- `ACR_WARN_STAGED_FILES_ENABLED=1` + low `ACR_WARN_STAGED_FILES_THRESHOLD` to trigger confirmation
+- `ACR_SUPPRESS_TOOL_OUTPUT=1` to confirm git output is hidden
+- `undo` on unpushed commit
+- `undo` on pushed commit (should warn and require confirmation)
+
 ## Project Structure
 
 ```
