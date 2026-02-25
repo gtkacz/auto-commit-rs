@@ -62,18 +62,34 @@ pub fn default_model_for(provider: &str) -> &'static str {
     get_provider(provider).map_or("", |p| p.default_model)
 }
 
-/// Call the LLM API and return the generated commit message
-pub fn call_llm(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<String> {
-    let (url, headers_raw, format, response_path) = resolve_provider(cfg)?;
+pub enum LlmCallError {
+    HttpError { code: u16, body: String },
+    TransportError(String),
+    Other(anyhow::Error),
+}
+
+impl std::fmt::Display for LlmCallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LlmCallError::HttpError { code, body } => {
+                write!(f, "API returned HTTP {code}: {body}")
+            }
+            LlmCallError::TransportError(msg) => write!(f, "Network error: {msg}"),
+            LlmCallError::Other(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+fn call_llm_inner(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<String, LlmCallError> {
+    let (url, headers_raw, format, response_path) =
+        resolve_provider(cfg).map_err(LlmCallError::Other)?;
 
     let url = interpolate(&url, cfg);
     let headers_raw = interpolate(&headers_raw, cfg);
 
     let body = build_request_body(format, &cfg.model, system_prompt, diff);
-
     let headers = parse_headers(&headers_raw);
 
-    // Spinner
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -83,7 +99,6 @@ pub fn call_llm(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<Stri
     spinner.set_message("Generating commit message...");
     spinner.enable_steady_tick(Duration::from_millis(80));
 
-    // HTTP request
     let mut req = ureq::post(&url);
     for (key, val) in &headers {
         req = req.set(key, val);
@@ -94,29 +109,117 @@ pub fn call_llm(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<Stri
 
     spinner.finish_and_clear();
 
-    let response = response.map_err(|e| match e {
-        ureq::Error::Status(code, resp) => {
+    let response = match response {
+        Ok(resp) => resp,
+        Err(ureq::Error::Status(code, resp)) => {
             let body = resp.into_string().unwrap_or_default();
-            anyhow::anyhow!("API returned HTTP {code}: {body}")
+            return Err(LlmCallError::HttpError { code, body });
         }
-        ureq::Error::Transport(t) => {
-            anyhow::anyhow!("Network error: {t}")
+        Err(ureq::Error::Transport(t)) => {
+            return Err(LlmCallError::TransportError(t.to_string()));
         }
-    })?;
+    };
 
     let json: Value = response
         .into_json()
-        .context("Failed to parse API response as JSON")?;
+        .map_err(|e| LlmCallError::Other(anyhow::anyhow!("Failed to parse API response as JSON: {e}")))?;
 
-    let message = extract_by_path(&json, &response_path).with_context(|| {
-        format!(
-            "Failed to extract message from response at path '{}'. Response:\n{}",
+    let message = extract_by_path(&json, &response_path).map_err(|e| {
+        LlmCallError::Other(anyhow::anyhow!(
+            "Failed to extract message from response at path '{}'. Response:\n{}\nError: {}",
             response_path,
-            serde_json::to_string_pretty(&json).unwrap_or_default()
-        )
+            serde_json::to_string_pretty(&json).unwrap_or_default(),
+            e
+        ))
     })?;
 
     Ok(message)
+}
+
+/// Call LLM with fallback support. Returns (message, fallback_preset_name_if_used).
+pub fn call_llm_with_fallback(
+    cfg: &AppConfig,
+    system_prompt: &str,
+    diff: &str,
+) -> Result<(String, Option<String>)> {
+    match call_llm_inner(cfg, system_prompt, diff) {
+        Ok(msg) => return Ok((msg, None)),
+        Err(LlmCallError::TransportError(msg)) => {
+            anyhow::bail!("Network error: {msg}");
+        }
+        Err(LlmCallError::HttpError { code, body }) => {
+            if !cfg.fallback_enabled {
+                anyhow::bail!("API returned HTTP {code}: {body}");
+            }
+
+            let presets_file = match crate::preset::load_presets() {
+                Ok(f) => f,
+                Err(_) => anyhow::bail!("API returned HTTP {code}: {body}"),
+            };
+
+            if presets_file.fallback.order.is_empty() {
+                anyhow::bail!("API returned HTTP {code}: {body}");
+            }
+
+            let current_fields = crate::preset::fields_from_config(cfg);
+            let mut errors = vec![format!("Primary (HTTP {code})")];
+
+            for &preset_id in &presets_file.fallback.order {
+                let preset = match presets_file.presets.iter().find(|p| p.id == preset_id) {
+                    Some(p) => p,
+                    None => continue,
+                };
+
+                // Skip if this preset matches current config (dedup key comparison)
+                if preset.fields.provider == current_fields.provider
+                    && preset.fields.model == current_fields.model
+                    && preset.fields.api_key == current_fields.api_key
+                    && preset.fields.api_url == current_fields.api_url
+                {
+                    continue;
+                }
+
+                eprintln!(
+                    "{} Primary failed (HTTP {}), trying: {}...",
+                    "fallback:".yellow().bold(),
+                    code,
+                    preset.name
+                );
+
+                let mut temp_cfg = cfg.clone();
+                crate::preset::apply_preset_to_config(&mut temp_cfg, preset);
+
+                match call_llm_inner(&temp_cfg, system_prompt, diff) {
+                    Ok(msg) => return Ok((msg, Some(preset.name.clone()))),
+                    Err(LlmCallError::HttpError { code: fc, .. }) => {
+                        errors.push(format!("{} (HTTP {fc})", preset.name));
+                        continue;
+                    }
+                    Err(LlmCallError::TransportError(msg)) => {
+                        anyhow::bail!("Network error during fallback to '{}': {msg}", preset.name);
+                    }
+                    Err(LlmCallError::Other(e)) => {
+                        errors.push(format!("{} ({})", preset.name, e));
+                        continue;
+                    }
+                }
+            }
+
+            anyhow::bail!(
+                "All LLM providers failed: {}",
+                errors.join(", ")
+            );
+        }
+        Err(LlmCallError::Other(e)) => {
+            anyhow::bail!("{e}");
+        }
+    }
+}
+
+/// Call the LLM API and return the generated commit message
+pub fn call_llm(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<String> {
+    let (msg, _) = call_llm_with_fallback(cfg, system_prompt, diff)?;
+    Ok(msg)
 }
 
 fn resolve_provider(cfg: &AppConfig) -> Result<(String, String, RequestFormat, String)> {

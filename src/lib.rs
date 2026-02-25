@@ -1,7 +1,9 @@
+pub mod cache;
 pub mod cli;
 pub mod config;
 pub mod git;
 pub mod interpolation;
+pub mod preset;
 pub mod prompt;
 pub mod provider;
 pub mod update;

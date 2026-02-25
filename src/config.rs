@@ -56,6 +56,10 @@ pub struct AppConfig {
     pub confirm_new_version: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_update: Option<bool>,
+    #[serde(default = "default_true")]
+    pub fallback_enabled: bool,
+    #[serde(default = "default_true")]
+    pub track_generated_commits: bool,
 }
 
 fn default_provider() -> String {
@@ -67,7 +71,7 @@ fn default_model() -> String {
 fn default_locale() -> String {
     "en".into()
 }
-fn default_true() -> bool {
+pub fn default_true() -> bool {
     true
 }
 fn default_post_commit_push() -> String {
@@ -107,6 +111,8 @@ impl Default for AppConfig {
             warn_staged_files_threshold: default_warn_staged_files_threshold(),
             confirm_new_version: true,
             auto_update: None,
+            fallback_enabled: true,
+            track_generated_commits: true,
         }
     }
 }
@@ -131,6 +137,8 @@ const ENV_FIELD_MAP: &[(&str, &str)] = &[
     ("WARN_STAGED_FILES_THRESHOLD", "warn_staged_files_threshold"),
     ("CONFIRM_NEW_VERSION", "confirm_new_version"),
     ("AUTO_UPDATE", "auto_update"),
+    ("FALLBACK_ENABLED", "fallback_enabled"),
+    ("TRACK_GENERATED_COMMITS", "track_generated_commits"),
 ];
 
 impl AppConfig {
@@ -213,6 +221,8 @@ impl AppConfig {
         if other.auto_update.is_some() {
             self.auto_update = other.auto_update;
         }
+        self.fallback_enabled = other.fallback_enabled;
+        self.track_generated_commits = other.track_generated_commits;
     }
 
     fn apply_env_map(&mut self, map: &HashMap<String, String>) {
@@ -254,6 +264,13 @@ impl AppConfig {
                     "AUTO_UPDATE" => {
                         self.auto_update =
                             Some(val == "1" || val.eq_ignore_ascii_case("true"));
+                    }
+                    "FALLBACK_ENABLED" => {
+                        self.fallback_enabled = val == "1" || val.eq_ignore_ascii_case("true");
+                    }
+                    "TRACK_GENERATED_COMMITS" => {
+                        self.track_generated_commits =
+                            val == "1" || val.eq_ignore_ascii_case("true");
                     }
                     _ => {}
                 }
@@ -341,6 +358,18 @@ impl AppConfig {
                 if auto_update { "1" } else { "0" }
             ));
         }
+        lines.push(format!(
+            "ACR_FALLBACK_ENABLED={}",
+            if self.fallback_enabled { "1" } else { "0" }
+        ));
+        lines.push(format!(
+            "ACR_TRACK_GENERATED_COMMITS={}",
+            if self.track_generated_commits {
+                "1"
+            } else {
+                "0"
+            }
+        ));
 
         std::fs::write(&env_path, lines.join("\n") + "\n")
             .with_context(|| format!("Failed to write {}", env_path.display()))?;
@@ -468,6 +497,24 @@ impl AppConfig {
                     None => "(not set)".into(),
                 },
             ),
+            (
+                "Fallback Enabled",
+                "FALLBACK_ENABLED",
+                if self.fallback_enabled {
+                    "enabled".into()
+                } else {
+                    "disabled".into()
+                },
+            ),
+            (
+                "Track Generated Commits",
+                "TRACK_GENERATED_COMMITS",
+                if self.track_generated_commits {
+                    "enabled".into()
+                } else {
+                    "disabled".into()
+                },
+            ),
         ]
     }
 
@@ -485,12 +532,14 @@ impl AppConfig {
             "LOCALE",
             "LLM_SYSTEM_PROMPT",
             "COMMIT_TEMPLATE",
+            "FALLBACK_ENABLED",
         ];
         let commit_keys: &[&'static str] = &[
             "ONE_LINER",
             "USE_GITMOJI",
             "GITMOJI_FORMAT",
             "REVIEW_COMMIT",
+            "TRACK_GENERATED_COMMITS",
         ];
         let post_commit_keys: &[&'static str] = &["POST_COMMIT_PUSH", "SUPPRESS_TOOL_OUTPUT"];
         let warnings_keys: &[&'static str] = &[
@@ -579,6 +628,12 @@ impl AppConfig {
             }
             "AUTO_UPDATE" => {
                 self.auto_update = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+            }
+            "FALLBACK_ENABLED" => {
+                self.fallback_enabled = value == "1" || value.eq_ignore_ascii_case("true");
+            }
+            "TRACK_GENERATED_COMMITS" => {
+                self.track_generated_commits = value == "1" || value.eq_ignore_ascii_case("true");
             }
             _ => {}
         }

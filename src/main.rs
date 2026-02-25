@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use auto_commit_rs::{cli, config, git, prompt, provider, update};
+use auto_commit_rs::{cache, cli, config, git, prompt, provider, update};
 use colored::Colorize;
 use inquire::{Confirm, Select, Text};
 
@@ -13,7 +13,9 @@ fn main() {
 fn run() -> Result<()> {
     let cli = cli::parse();
     let cfg = match &cli.command {
-        Some(cli::Command::Config) | Some(cli::Command::Update) => None,
+        Some(cli::Command::Config) | Some(cli::Command::Update) | Some(cli::Command::History) => {
+            None
+        }
         _ => Some(config::AppConfig::load()?),
     };
 
@@ -24,9 +26,9 @@ fn run() -> Result<()> {
         }
     }
 
-    // Check for updates (except for config/update commands)
+    // Check for updates (except for config/update/history commands)
     let update_warning = match &cli.command {
-        Some(cli::Command::Config) | Some(cli::Command::Update) => None,
+        Some(cli::Command::Config | cli::Command::Update | cli::Command::History) => None,
         _ => check_for_updates(cfg.as_ref()),
     };
 
@@ -36,6 +38,9 @@ fn run() -> Result<()> {
         }
         Some(cli::Command::Update) => {
             run_update_command()?;
+        }
+        Some(cli::Command::History) => {
+            cache::interactive_history()?;
         }
         Some(cli::Command::Undo) => {
             run_undo(cfg.as_ref().expect("config should be loaded"))?;
@@ -104,6 +109,15 @@ fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
     git::run_commit(&final_msg, &cli.extra_args, cfg.suppress_tool_output)
         .context("git commit failed")?;
 
+    if cfg.track_generated_commits {
+        if let Ok(repo_root) = git::find_repo_root() {
+            if let Ok(hash) = cache::get_head_hash() {
+                let preview: String = final_msg.chars().take(80).collect();
+                let _ = cache::record_commit(&repo_root, &hash, &preview);
+            }
+        }
+    }
+
     if cli.tag {
         create_semver_tag(cfg)?;
     }
@@ -159,6 +173,15 @@ fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Res
     git::rewrite_commit_message(&target, &final_msg, cfg.suppress_tool_output)
         .context("Failed to rewrite commit message")?;
 
+    if cfg.track_generated_commits {
+        if let Ok(repo_root) = git::find_repo_root() {
+            if let Ok(hash) = cache::get_head_hash() {
+                let preview: String = final_msg.chars().take(80).collect();
+                let _ = cache::record_commit(&repo_root, &hash, &preview);
+            }
+        }
+    }
+
     if target_is_pushed {
         let should_push =
             Confirm::new("History was rewritten on a pushed commit. Attempt `git push` now?")
@@ -209,8 +232,17 @@ fn generate_final_message(
         println!("\n{}", "LLM system prompt:".cyan().bold());
         println!("{system_prompt}\n");
     }
-    let mut message =
-        provider::call_llm(cfg, &system_prompt, diff).context("LLM API call failed")?;
+    let (mut message, fallback_name) =
+        provider::call_llm_with_fallback(cfg, &system_prompt, diff)
+            .context("LLM API call failed")?;
+
+    if let Some(ref name) = fallback_name {
+        println!(
+            "  {} Used fallback preset: {}",
+            "note:".yellow().bold(),
+            name
+        );
+    }
 
     let final_msg = if cfg.review_commit {
         loop {
@@ -222,8 +254,17 @@ fn generate_final_message(
             match review_message()? {
                 ReviewAction::Accept => break candidate,
                 ReviewAction::Regenerate => {
-                    message = provider::call_llm(cfg, &system_prompt, diff)
-                        .context("LLM API call failed")?;
+                    let (new_msg, fb) =
+                        provider::call_llm_with_fallback(cfg, &system_prompt, diff)
+                            .context("LLM API call failed")?;
+                    message = new_msg;
+                    if let Some(ref name) = fb {
+                        println!(
+                            "  {} Used fallback preset: {}",
+                            "note:".yellow().bold(),
+                            name
+                        );
+                    }
                 }
                 ReviewAction::Edit => {
                     let edited = Text::new("Edit commit message:")

@@ -9,19 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- 
+- LLM presets: save, load, rename, duplicate, delete, export/import reusable provider configurations via `cgen config`
+- Fallback order: automatic retry with alternate LLM presets when the primary provider returns an HTTP error
+- `ACR_FALLBACK_ENABLED` configuration flag (default: enabled) to toggle LLM fallback behavior
+- Per-repository commit cache: track which commits were AI-generated
+- `cgen history` subcommand to browse AI-generated commits per repository (with `git show` integration)
+- `ACR_TRACK_GENERATED_COMMITS` configuration flag (default: enabled) to toggle commit tracking
+- Preset management menu in `cgen config` (save current as preset, load preset, manage presets, configure fallback order)
+- Preset change tracking: warns when loaded preset fields are modified and offers to update on save
+- Export/import presets as TOML (with optional API key redaction)
 
 ### Changed
 
-- 
+- `call_llm` now uses `call_llm_with_fallback` internally, enabling automatic provider retry
+- `generate_final_message` reports which fallback preset was used (if any)
+- Config menu now includes preset and fallback management entries
 
 ### Fixed
 
-- 
+- Cursor no longer resets to top of view when collapsing headers on the `cgen config` view
 
 ### Removed
 
-- 
+-
 
 ## [1.1.0] - 2026-02-24
 

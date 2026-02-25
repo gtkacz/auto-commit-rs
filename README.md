@@ -95,6 +95,7 @@ cgen undo               # Undo latest commit with safety prompts (soft reset)
 cgen update             # Update cgen to the latest version
 cgen config             # Interactive config editor (auto-detects scope)
 cgen prompt             # Print the LLM system prompt without running anything
+cgen history            # Browse AI-generated commits for the current repo
 ```
 
 Any arguments passed to `cgen` (without a subcommand) are forwarded directly to `git commit`.
@@ -123,6 +124,8 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 | `ACR_WARN_STAGED_FILES_THRESHOLD` | `20` | Staged files warning threshold (warn when count is greater) |
 | `ACR_CONFIRM_NEW_VERSION` | `1` | Ask before creating the computed `--tag` version (`1`/`0`) |
 | `ACR_AUTO_UPDATE` | — | Enable automatic updates (`1`/`0`); prompts on first run if unset |
+| `ACR_FALLBACK_ENABLED` | `1` | Try fallback presets when primary LLM fails (`1`/`0`) |
+| `ACR_TRACK_GENERATED_COMMITS` | `1` | Track AI-generated commits per repository (`1`/`0`) |
 
 ### Config Locations
 
@@ -171,6 +174,35 @@ ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
 - The first time cgen runs, it asks whether to enable automatic updates and saves the preference to the global config.
 - If `ACR_AUTO_UPDATE=1`, cgen automatically updates when a newer version is found.
 - If `ACR_AUTO_UPDATE=0` (or unset after the prompt), a warning is shown at the end of the output with the available version.
+
+### LLM Presets
+
+Presets let you save and reuse LLM provider configurations. Manage them from the `cgen config` interactive menu:
+
+- **Save current as preset**: saves the current provider/model/key/url/headers as a named preset
+- **Load a preset**: applies a saved preset to the current config session
+- **Manage presets**: create, rename, duplicate, delete, export, and import presets
+- **Export/Import**: export presets as TOML (optionally redacting API keys) for sharing or backup
+
+Presets are stored in `{config_dir}/cgen/presets.toml` alongside the global config. Deduplication uses `(provider, model, api_key, api_url)` as the key.
+
+### Fallback Order
+
+When `ACR_FALLBACK_ENABLED=1` (default) and the primary LLM returns an HTTP error (4xx/5xx), cgen automatically tries fallback presets in the configured order:
+
+- Configure fallback order from the `cgen config` menu under "Configure fallback order..."
+- Presets matching the current config are skipped
+- Transport/network errors fail immediately (no fallback)
+- A summary of all failures is shown if every provider fails
+
+### Commit History
+
+When `ACR_TRACK_GENERATED_COMMITS=1` (default), cgen records each AI-generated commit hash and message preview in a per-repository cache.
+
+- `cgen history` inside a git repo shows that repo's tracked commits
+- `cgen history` outside a git repo lists all tracked repos, then shows commits for the selected one
+- Selecting a commit runs `git show` on it
+- Cache is stored in `{config_dir}/cgen/cache/`
 
 ## Providers
 
