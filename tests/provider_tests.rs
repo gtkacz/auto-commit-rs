@@ -1,6 +1,11 @@
+mod common;
+
 use auto_commit_rs::config::AppConfig;
 use auto_commit_rs::provider;
 use mockito::{Matcher, Server};
+use crate::common::EnvGuard;
+use std::fs;
+use serial_test::serial;
 
 fn cfg_for(provider_name: &str, api_url: String) -> AppConfig {
     let mut cfg = AppConfig::default();
@@ -85,6 +90,7 @@ fn call_llm_custom_provider_requires_url() {
 }
 
 #[test]
+#[serial]
 fn call_llm_reports_http_status_and_bad_response_path_errors() {
     let mut server = Server::new();
     let status_mock = server
@@ -129,4 +135,65 @@ fn call_llm_interpolates_custom_headers_and_url_variables() {
     let msg = provider::call_llm(&cfg, "system", "diff").expect("llm call");
     assert_eq!(msg, "chore: custom");
     mock.assert();
+}
+
+#[test]
+#[serial]
+fn call_llm_with_fallback_tries_next_preset() {
+    let mut server = Server::new();
+    
+    // Primary fails
+    let mock_primary = server
+        .mock("POST", "/primary")
+        .with_status(500)
+        .with_body("server error")
+        .create();
+
+    // Fallback succeeds
+    let mock_fallback = server
+        .mock("POST", "/fallback")
+        .with_status(200)
+        .with_body(r#"{"choices":[{"message":{"content":"fallback success"}}]}"#)
+        .create();
+
+    let mut cfg = cfg_for("custom", format!("{}/primary", server.url()));
+    cfg.fallback_enabled = true;
+
+    // Setup presets file
+    let cfg_dir = tempfile::TempDir::new().expect("tempdir");
+    let _env = EnvGuard::set(&[
+        ("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref()),
+    ]);
+    
+    // Create cgen dir inside config home
+    let cgen_dir = cfg_dir.path().join("cgen");
+    fs::create_dir_all(&cgen_dir).expect("create cgen dir");
+
+    let fallback_url = format!("{}/fallback", server.url());
+    
+    let presets_toml = format!(r#"
+next_id = 1
+[[presets]]
+id = 0
+name = "fallback-preset"
+provider = "custom"
+model = "fallback-model"
+api_key = "fallback-key"
+api_url = "{}"
+api_headers = ""
+
+[fallback]
+enabled = true
+order = [0]
+"#, fallback_url);
+
+    fs::write(cgen_dir.join("presets.toml"), presets_toml).expect("write presets");
+
+    let (msg, preset_name) = provider::call_llm_with_fallback(&cfg, "system", "diff").expect("llm call with fallback");
+    
+    assert_eq!(msg, "fallback success");
+    assert_eq!(preset_name, Some("fallback-preset".to_string()));
+    
+    mock_primary.assert();
+    mock_fallback.assert();
 }

@@ -366,7 +366,7 @@ fn resolve_commit(commit: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn ensure_ancestor_of_head(commit: &str) -> Result<()> {
+pub fn ensure_ancestor_of_head(commit: &str) -> Result<()> {
     let status = Command::new("git")
         .args(["merge-base", "--is-ancestor", commit, "HEAD"])
         .stdout(Stdio::null())

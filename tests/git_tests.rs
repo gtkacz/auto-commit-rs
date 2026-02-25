@@ -134,3 +134,85 @@ fn rewrite_head_commit_message_amends_commit() {
     assert_eq!(current, "feat: new");
     assert_ne!(rewritten, original);
 }
+
+#[test]
+#[serial]
+fn commit_is_merge_detects_merge_commits() {
+    let repo = common::init_git_repo();
+    let _cwd = DirGuard::enter(repo.path());
+
+    // Create a commit on main
+    let c1 = commit_file(repo.path(), "a.txt", "1", "c1");
+
+    // Create a branch
+    git_ok(repo.path(), ["checkout", "-b", "feature"]);
+    let c2 = commit_file(repo.path(), "b.txt", "2", "c2");
+
+    // Switch back to main (master in init_git_repo usually)
+    // We'll just checkout c1 and create a new branch to be sure
+    git_ok(repo.path(), ["checkout", &c1]);
+    git_ok(repo.path(), ["checkout", "-b", "main_branch"]);
+    let c3 = commit_file(repo.path(), "c.txt", "3", "c3");
+
+    // Merge feature into main_branch
+    // We might need to configure user email/name which init_git_repo does.
+    // We use --no-ff to force a merge commit
+    git_ok(repo.path(), ["merge", "--no-ff", "feature", "-m", "merge commit"]);
+
+    let merge_commit = git_stdout(repo.path(), ["rev-parse", "HEAD"]);
+
+    assert!(git::commit_is_merge(&merge_commit).expect("check merge"));
+    assert!(git::head_is_merge_commit().expect("check head merge"));
+    assert!(!git::commit_is_merge(&c1).expect("check normal commit"));
+    assert!(!git::commit_is_merge(&c2).expect("check normal commit"));
+}
+
+#[test]
+#[serial]
+fn ensure_ancestor_of_head_checks_ancestry() {
+    let repo = common::init_git_repo();
+    let _cwd = DirGuard::enter(repo.path());
+
+    let c1 = commit_file(repo.path(), "a.txt", "1", "c1");
+    let c2 = commit_file(repo.path(), "a.txt", "2", "c2");
+
+    // c1 is ancestor of c2 (HEAD)
+    assert!(git::ensure_ancestor_of_head(&c1).is_ok());
+    assert!(git::ensure_ancestor_of_head(&c2).is_ok()); // HEAD is ancestor of HEAD
+
+    // Create a detached commit or parallel branch
+    git_ok(repo.path(), ["checkout", "--detach", &c1]);
+    let c3 = commit_file(repo.path(), "a.txt", "3", "c3");
+
+    // Switch back to c2
+    git_ok(repo.path(), ["checkout", &c2]);
+
+    // c3 is NOT ancestor of c2
+    assert!(git::ensure_ancestor_of_head(&c3).is_err());
+}
+
+#[test]
+#[serial]
+fn reword_non_head_commit_works() {
+    let repo = common::init_git_repo();
+    let _cwd = DirGuard::enter(repo.path());
+
+    let _c1 = commit_file(repo.path(), "a.txt", "1", "c1");
+    let c2 = commit_file(repo.path(), "a.txt", "2", "old message");
+    let _c3 = commit_file(repo.path(), "a.txt", "3", "c3");
+
+    // We want to reword c2.
+    // git::rewrite_commit_message handles HEAD (amend) and non-HEAD (rebase).
+    // It calls reword_non_head_commit for c2.
+
+    git::rewrite_commit_message(&c2, "new message", true).expect("rewrite should succeed");
+
+    // Verify c2 message is changed. 
+    // Since history changed, we look at HEAD~1
+    let msg = git_stdout(repo.path(), ["log", "-1", "--pretty=%s", "HEAD~1"]);
+    assert_eq!(msg, "new message");
+
+    // Verify content is still there (c3 content at HEAD)
+    let content = std::fs::read_to_string(repo.path().join("a.txt")).expect("read file");
+    assert_eq!(content, "3");
+}
