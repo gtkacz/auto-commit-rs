@@ -29,3 +29,5 @@ target
 .serena/
 .chunkhound
 .chunkhound.json
+.mcp.json
+.python-version
