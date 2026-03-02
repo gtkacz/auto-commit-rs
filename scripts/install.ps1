@@ -1,9 +1,9 @@
 # cgen installer for Windows
-# Usage: irm https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/gtkacz/smart-commit-rs/main/scripts/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-$Repo = "gtkacz/auto-commit-rs"
+$Repo = "gtkacz/smart-commit-rs"
 $BinaryName = "cgen.exe"
 $Artifact = "cgen-windows-amd64.exe"
 

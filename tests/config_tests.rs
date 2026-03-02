@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 
-use auto_commit_rs::config::{global_config_path, AppConfig};
+use auto_commit_rs::config::{field_description, global_config_path, AppConfig};
 use serial_test::serial;
 
 use crate::common::{DirGuard, EnvGuard, GlobalConfigGuard};
@@ -351,4 +351,21 @@ fn grouped_fields_covers_all_config_fields() {
             suffix
         );
     }
+}
+
+#[test]
+fn field_description_returns_descriptions_for_known_fields() {
+    assert!(!field_description("PROVIDER").is_empty());
+    assert!(!field_description("MODEL").is_empty());
+    assert!(!field_description("API_KEY").is_empty());
+    assert!(!field_description("API_URL").is_empty());
+    assert!(!field_description("LOCALE").is_empty());
+    assert!(!field_description("ONE_LINER").is_empty());
+    assert!(!field_description("USE_GITMOJI").is_empty());
+    assert!(!field_description("FALLBACK_ENABLED").is_empty());
+    assert!(!field_description("TRACK_GENERATED_COMMITS").is_empty());
+
+    // Unknown fields return empty string
+    assert!(field_description("UNKNOWN_FIELD").is_empty());
+    assert!(field_description("").is_empty());
 }

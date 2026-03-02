@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use auto_commit_rs::{cache, cli, config, git, prompt, provider, update};
+use auto_commit_rs::{cache, cli, config, git, preset, prompt, provider, ui, update};
 use colored::Colorize;
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 
 fn main() {
     if let Err(e) = run() {
@@ -13,9 +13,13 @@ fn main() {
 fn run() -> Result<()> {
     let cli = cli::parse();
     let cfg = match &cli.command {
-        Some(cli::Command::Config) | Some(cli::Command::Update) | Some(cli::Command::History) => {
-            None
-        }
+        Some(
+            cli::Command::Config
+            | cli::Command::Update
+            | cli::Command::History
+            | cli::Command::Preset
+            | cli::Command::Fallback,
+        ) => None,
         _ => Some(config::AppConfig::load()?),
     };
 
@@ -28,7 +32,13 @@ fn run() -> Result<()> {
 
     // Check for updates (except for config/update/history commands)
     let update_warning = match &cli.command {
-        Some(cli::Command::Config | cli::Command::Update | cli::Command::History) => None,
+        Some(
+            cli::Command::Config
+            | cli::Command::Update
+            | cli::Command::History
+            | cli::Command::Preset
+            | cli::Command::Fallback,
+        ) => None,
         _ => check_for_updates(cfg.as_ref()),
     };
 
@@ -41,6 +51,12 @@ fn run() -> Result<()> {
         }
         Some(cli::Command::History) => {
             cache::interactive_history()?;
+        }
+        Some(cli::Command::Preset) => {
+            preset::interactive_presets()?;
+        }
+        Some(cli::Command::Fallback) => {
+            preset::interactive_fallback_order()?;
         }
         Some(cli::Command::Undo) => {
             run_undo(cfg.as_ref().expect("config should be loaded"))?;
@@ -83,10 +99,7 @@ fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
             staged_files.len(),
             cfg.warn_staged_files_threshold
         );
-        let should_continue = Confirm::new(&prompt)
-            .with_default(false)
-            .prompt()
-            .unwrap_or(false);
+        let should_continue = ui::confirm(&prompt, false);
         if !should_continue {
             println!("{}", "Commit cancelled.".dimmed());
             return Ok(());
@@ -144,12 +157,10 @@ fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Res
     let target_is_head = git::is_head_commit(&target)?;
     let target_is_pushed = git::commit_is_pushed(&target)?;
     if target_is_pushed {
-        let proceed = Confirm::new(
+        let proceed = ui::confirm(
             "Target commit appears to be pushed already. Rewriting history may require a force push. Continue?",
-        )
-        .with_default(false)
-        .prompt()
-        .unwrap_or(false);
+            false,
+        );
         if !proceed {
             println!("{}", "Alter cancelled.".dimmed());
             return Ok(());
@@ -183,11 +194,10 @@ fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Res
     }
 
     if target_is_pushed {
-        let should_push =
-            Confirm::new("History was rewritten on a pushed commit. Attempt `git push` now?")
-                .with_default(false)
-                .prompt()
-                .unwrap_or(false);
+        let should_push = ui::confirm(
+            "History was rewritten on a pushed commit. Attempt `git push` now?",
+            false,
+        );
         if should_push {
             if !target_is_head {
                 println!(
@@ -296,10 +306,7 @@ fn create_semver_tag(cfg: &config::AppConfig) -> Result<()> {
             Some(tag) => format!("Create new tag {next_tag} (latest: {tag})?"),
             None => format!("Create initial tag {next_tag}?"),
         };
-        Confirm::new(&prompt)
-            .with_default(true)
-            .prompt()
-            .unwrap_or(false)
+        ui::confirm(&prompt, true)
     } else {
         true
     };
@@ -363,10 +370,7 @@ fn handle_post_commit_push(cfg: &config::AppConfig, ask_prompt: &str) -> Result<
             git::run_push(cfg.suppress_tool_output).context("git push failed")?;
         }
         _ => {
-            let should_push = Confirm::new(ask_prompt)
-                .with_default(true)
-                .prompt()
-                .unwrap_or(false);
+            let should_push = ui::confirm(ask_prompt, true);
             if should_push {
                 git::run_push(cfg.suppress_tool_output).context("git push failed")?;
             }
@@ -376,31 +380,27 @@ fn handle_post_commit_push(cfg: &config::AppConfig, ask_prompt: &str) -> Result<
 }
 
 fn prompt_auto_update() {
-    let answer = Confirm::new("Would you like to enable automatic updates for cgen?")
-        .with_default(true)
-        .with_help_message("You can change this later with `cgen config`")
-        .prompt();
-
-    match answer {
-        Ok(yes) => {
-            if let Err(e) = config::save_auto_update_preference(yes) {
-                eprintln!(
-                    "{} Failed to save auto-update preference: {}",
-                    "warning:".yellow().bold(),
-                    e
-                );
-            } else {
-                let status = if yes { "enabled" } else { "disabled" };
-                println!(
-                    "{} Auto-updates {}.\n",
-                    "done!".green().bold(),
-                    status
-                );
-            }
-        }
-        Err(_) => {
-            // User cancelled - leave as None, will ask again next time
-        }
+    println!(
+        "  {}",
+        "You can change this later with `cgen config`".dimmed()
+    );
+    let yes = ui::confirm(
+        "Would you like to enable automatic updates for cgen?",
+        true,
+    );
+    if let Err(e) = config::save_auto_update_preference(yes) {
+        eprintln!(
+            "{} Failed to save auto-update preference: {}",
+            "warning:".yellow().bold(),
+            e
+        );
+    } else {
+        let status = if yes { "enabled" } else { "disabled" };
+        println!(
+            "{} Auto-updates {}.\n",
+            "done!".green().bold(),
+            status
+        );
     }
 }
 
@@ -496,11 +496,10 @@ fn run_undo(cfg: &config::AppConfig) -> Result<()> {
     git::ensure_head_exists()?;
 
     if git::head_is_merge_commit()? {
-        let proceed_merge =
-            Confirm::new("Latest commit is a merge commit. Undo it with git reset --soft HEAD~1?")
-                .with_default(false)
-                .prompt()
-                .unwrap_or(false);
+        let proceed_merge = ui::confirm(
+            "Latest commit is a merge commit. Undo it with git reset --soft HEAD~1?",
+            false,
+        );
         if !proceed_merge {
             println!("{}", "Undo cancelled.".dimmed());
             return Ok(());
@@ -515,11 +514,10 @@ fn run_undo(cfg: &config::AppConfig) -> Result<()> {
                 .bold()
         );
     } else if git::is_head_pushed()? {
-        let proceed_pushed =
-            Confirm::new("Latest commit appears to be pushed already. Undo locally anyway?")
-                .with_default(false)
-                .prompt()
-                .unwrap_or(false);
+        let proceed_pushed = ui::confirm(
+            "Latest commit appears to be pushed already. Undo locally anyway?",
+            false,
+        );
         if !proceed_pushed {
             println!("{}", "Undo cancelled.".dimmed());
             return Ok(());

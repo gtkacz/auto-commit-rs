@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use std::time::Duration;
 
-const GITHUB_REPO: &str = "gtkacz/auto-commit-rs";
+const GITHUB_REPO: &str = "gtkacz/smart-commit-rs";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub struct VersionCheck {
@@ -72,7 +72,7 @@ pub fn run_update() -> Result<()> {
     if is_cargo_available() {
         println!("{}", "Updating via cargo...".cyan().bold());
         let status = std::process::Command::new("cargo")
-            .args(["install", "auto-commit-rs"])
+            .args(["install", "smart-commit-rs"])
             .status()
             .context("Failed to run cargo install")?;
 
@@ -105,7 +105,7 @@ fn run_platform_installer() -> Result<()> {
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "irm https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.ps1 | iex",
+                "irm https://raw.githubusercontent.com/gtkacz/smart-commit-rs/main/scripts/install.ps1 | iex",
             ])
             .status()
             .context("Failed to run PowerShell installer")?;
@@ -118,7 +118,7 @@ fn run_platform_installer() -> Result<()> {
         let status = std::process::Command::new("bash")
             .args([
                 "-c",
-                "curl -fsSL https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.sh | bash",
+                "curl -fsSL https://raw.githubusercontent.com/gtkacz/smart-commit-rs/main/scripts/install.sh | bash",
             ])
             .status()
             .context("Failed to run install script")?;

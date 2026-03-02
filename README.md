@@ -1,8 +1,10 @@
-# auto-commit-rs
+# smart-commit-rs
 
 Minimal CLI tool that generates git commit messages via LLMs.
 
 Fast, lightweight, cross-platform. No runtime dependencies, just a single binary.
+
+(Formerly `auto-commit-rs`)
 
 ## ⚠️ Disclaimer: AI Generation and Code Quality
 
@@ -28,19 +30,19 @@ Tools like [opencommit](https://github.com/di-sukharev/opencommit) do the same t
 ### Linux / macOS (curl)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gtkacz/smart-commit-rs/main/scripts/install.sh | bash
 ```
 
 This detects your OS and architecture, downloads the latest release binary to `/usr/local/bin`, and makes it executable. Set `INSTALL_DIR` to change the target:
 
 ```sh
-INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.sh | bash
+INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/gtkacz/smart-commit-rs/main/scripts/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/gtkacz/auto-commit-rs/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/gtkacz/smart-commit-rs/main/scripts/install.ps1 | iex
 ```
 
 This downloads the latest release to `%LOCALAPPDATA%\cgen\` and adds it to your user PATH.
@@ -56,12 +58,12 @@ cargo install auto-commit-rs
 From git:
 
 ```sh
-cargo install --git https://github.com/gtkacz/auto-commit-rs
+cargo install --git https://github.com/gtkacz/smart-commit-rs
 ```
 
 ### Manual Download
 
-Grab a binary from the [Releases](https://github.com/gtkacz/auto-commit-rs/releases) page and place it somewhere in your PATH.
+Grab a binary from the [Releases](https://github.com/gtkacz/smart-commit-rs/releases) page and place it somewhere in your PATH.
 
 Available binaries:
 - `cgen-linux-amd64`, Linux x86_64
@@ -96,6 +98,8 @@ cgen update             # Update cgen to the latest version
 cgen config             # Interactive config editor (auto-detects scope)
 cgen prompt             # Print the LLM system prompt without running anything
 cgen history            # Browse AI-generated commits for the current repo
+cgen preset             # Manage LLM presets (same UI as config menu entry)
+cgen fallback           # Configure fallback order (same UI as config menu entry)
 ```
 
 Any arguments passed to `cgen` (without a subcommand) are forwarded directly to `git commit`.
@@ -149,6 +153,10 @@ ACR_API_HEADERS=Authorization: Bearer $ACR_API_KEY, X-Custom: $MY_HEADER
 - `cgen --verbose` prints the final system prompt sent to the LLM and never prints diff payload.
 - `cgen prompt` prints the full LLM system prompt (based on current config) without running any LLM call or git operations.
 - `cgen config` auto-detects the context: inside a git repo it asks whether to edit local or global settings; outside a repo it opens the global config directly.
+- The config view includes additional features:
+  - **Show descriptions [?]**: toggle to display help text for each setting
+  - **Search settings [/]**: find settings by name (auto-expands matching groups)
+  - Groups and subgroups are color-coded for easier navigation
 - `cgen alter --dry-run` generates and prints the rewritten message but does not rewrite history.
 - `cgen --tag` creates a semantic version tag after a successful commit:
   - no existing tag -> `0.1.0`

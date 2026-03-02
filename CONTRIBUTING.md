@@ -19,12 +19,12 @@ First off, thank you for considering contributing to cgen! Every contribution he
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally:
    ```sh
-   git clone https://github.com/YOUR_USERNAME/auto-commit-rs.git
-   cd auto-commit-rs
+   git clone https://github.com/YOUR_USERNAME/smart-commit-rs.git
+   cd smart-commit-rs
    ```
 3. **Add the upstream remote**:
    ```sh
-   git remote add upstream https://github.com/gtkacz/auto-commit-rs.git
+   git remote add upstream https://github.com/gtkacz/smart-commit-rs.git
    ```
 
 ## Development Setup
@@ -261,7 +261,7 @@ That's it — most OpenAI-compatible providers are just 5 lines.
 
 ## Reporting Bugs
 
-Open an [issue](https://github.com/gtkacz/auto-commit-rs/issues/new) with:
+Open an [issue](https://github.com/gtkacz/smart-commit-rs/issues/new) with:
 
 - **cgen version** (`cgen --version`)
 - **OS and architecture** (e.g., Windows 11 x64, macOS ARM)
@@ -271,7 +271,7 @@ Open an [issue](https://github.com/gtkacz/auto-commit-rs/issues/new) with:
 
 ## Suggesting Features
 
-Open an [issue](https://github.com/gtkacz/auto-commit-rs/issues/new) with:
+Open an [issue](https://github.com/gtkacz/smart-commit-rs/issues/new) with:
 
 - **What problem it solves** — describe the use case, not just the solution
 - **Proposed behavior** — how it would work from the user's perspective

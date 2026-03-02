@@ -18,12 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preset management menu in `cgen config` (save current as preset, load preset, manage presets, configure fallback order)
 - Preset change tracking: warns when loaded preset fields are modified and offers to update on save
 - Export/import presets as TOML (with optional API key redaction)
+- `cgen preset` standalone subcommand to manage LLM presets directly
+- `cgen fallback` standalone subcommand to configure fallback order directly
+- Config view: "Show descriptions [?]" toggle to display help text for each setting
+- Config view: "Search settings [/]" to find settings by name (auto-expands matching groups)
+- Config view: improved color variance with bright white for groups, bright cyan for subgroups
 
 ### Changed
 
 - `call_llm` now uses `call_llm_with_fallback` internally, enabling automatic provider retry
 - `generate_final_message` reports which fallback preset was used (if any)
 - Config menu now includes preset and fallback management entries
+- All (y/N) confirmation prompts replaced with interactive Select menus showing "Yes"/"No" options
+- Config view: selected item header now strips tree-drawing characters for cleaner display
+- Preset management: restructured menu - select a preset first via "Manage existing preset...", then choose action (Rename/Duplicate/Delete)
 
 ### Fixed
 

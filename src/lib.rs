@@ -6,4 +6,5 @@ pub mod interpolation;
 pub mod preset;
 pub mod prompt;
 pub mod provider;
+pub mod ui;
 pub mod update;

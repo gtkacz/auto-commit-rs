@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::config::AppConfig;
+use crate::ui;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LlmPresetFields {
@@ -215,17 +216,15 @@ pub fn interactive_presets() -> Result<()> {
             }
         }
 
-        let choices = vec![
-            "Create new preset",
-            "Rename preset",
-            "Duplicate preset",
-            "Delete preset",
-            "Export presets",
-            "Import presets",
-            "Back",
-        ];
+        let mut choices = vec!["Create new preset"];
+        if !file.presets.is_empty() {
+            choices.push("Manage existing preset...");
+            choices.push("Export presets");
+        }
+        choices.push("Import presets");
+        choices.push("Back");
 
-        let action = match Select::new("Manage presets:", choices).prompt() {
+        let action = match Select::new("Presets:", choices).prompt() {
             Ok(a) => a,
             Err(_) => break,
         };
@@ -276,73 +275,50 @@ pub fn interactive_presets() -> Result<()> {
                 save_presets(&file)?;
                 println!("  {} Created preset [{}]", "done!".green().bold(), id);
             }
-            "Rename preset" => {
-                if file.presets.is_empty() {
-                    continue;
-                }
+            "Manage existing preset..." => {
                 let options: Vec<String> =
                     file.presets.iter().map(|p| preset_display(p)).collect();
-                if let Ok(choice) = Select::new("Select preset to rename:", options.clone()).prompt()
-                {
-                    let idx = options.iter().position(|o| o == &choice).unwrap();
-                    let id = file.presets[idx].id;
-                    if let Ok(new_name) = Text::new("New name:").prompt() {
-                        rename_preset(&mut file, id, new_name);
-                        save_presets(&file)?;
-                        println!("  {}", "Renamed.".green().bold());
+                let Ok(choice) = Select::new("Select preset:", options.clone()).prompt() else {
+                    continue;
+                };
+                let idx = options.iter().position(|o| o == &choice).unwrap();
+                let selected_id = file.presets[idx].id;
+
+                let manage_choices = vec!["Rename", "Duplicate", "Delete", "Back"];
+                let Ok(manage_action) = Select::new("Action:", manage_choices).prompt() else {
+                    continue;
+                };
+
+                match manage_action {
+                    "Rename" => {
+                        if let Ok(new_name) = Text::new("New name:").prompt() {
+                            rename_preset(&mut file, selected_id, new_name);
+                            save_presets(&file)?;
+                            println!("  {}", "Renamed.".green().bold());
+                        }
                     }
-                }
-            }
-            "Duplicate preset" => {
-                if file.presets.is_empty() {
-                    continue;
-                }
-                let options: Vec<String> =
-                    file.presets.iter().map(|p| preset_display(p)).collect();
-                if let Ok(choice) =
-                    Select::new("Select preset to duplicate:", options.clone()).prompt()
-                {
-                    let idx = options.iter().position(|o| o == &choice).unwrap();
-                    let id = file.presets[idx].id;
-                    let new_id = duplicate_preset(&mut file, id)?;
-                    save_presets(&file)?;
-                    println!(
-                        "  {} Duplicated as [{}]",
-                        "done!".green().bold(),
-                        new_id
-                    );
-                }
-            }
-            "Delete preset" => {
-                if file.presets.is_empty() {
-                    continue;
-                }
-                let options: Vec<String> =
-                    file.presets.iter().map(|p| preset_display(p)).collect();
-                if let Ok(choice) =
-                    Select::new("Select preset to delete:", options.clone()).prompt()
-                {
-                    let idx = options.iter().position(|o| o == &choice).unwrap();
-                    let id = file.presets[idx].id;
-                    let confirm = Confirm::new("Delete this preset?")
-                        .with_default(false)
-                        .prompt()
-                        .unwrap_or(false);
-                    if confirm {
-                        delete_preset(&mut file, id);
+                    "Duplicate" => {
+                        let new_id = duplicate_preset(&mut file, selected_id)?;
                         save_presets(&file)?;
-                        println!("  {}", "Deleted.".green().bold());
+                        println!(
+                            "  {} Duplicated as [{}]",
+                            "done!".green().bold(),
+                            new_id
+                        );
                     }
+                    "Delete" => {
+                        let confirm = ui::confirm("Delete this preset?", false);
+                        if confirm {
+                            delete_preset(&mut file, selected_id);
+                            save_presets(&file)?;
+                            println!("  {}", "Deleted.".green().bold());
+                        }
+                    }
+                    _ => {}
                 }
             }
             "Export presets" => {
-                if file.presets.is_empty() {
-                    continue;
-                }
-                let include_keys = Confirm::new("Include API keys in export?")
-                    .with_default(false)
-                    .prompt()
-                    .unwrap_or(false);
+                let include_keys = ui::confirm("Include API keys in export?", false);
                 let ids: Vec<u32> = file.presets.iter().map(|p| p.id).collect();
                 match export_presets(&file, &ids, include_keys) {
                     Ok(data) => {
@@ -520,10 +496,7 @@ pub fn interactive_fallback_order() -> Result<()> {
                 }
             }
             "Clear all" => {
-                let confirm = Confirm::new("Clear entire fallback order?")
-                    .with_default(false)
-                    .prompt()
-                    .unwrap_or(false);
+                let confirm = ui::confirm("Clear entire fallback order?", false);
                 if confirm {
                     file.fallback.order.clear();
                     save_presets(&file)?;
@@ -594,10 +567,7 @@ pub fn preset_is_modified(cfg: &AppConfig, snapshot: &LlmPresetFields) -> bool {
 
 /// Prompt user to update the loaded preset with current config fields.
 pub fn prompt_update_preset(cfg: &AppConfig, preset_id: u32) -> Result<()> {
-    let should_update = Confirm::new("Update the loaded preset too?")
-        .with_default(false)
-        .prompt()
-        .unwrap_or(false);
+    let should_update = ui::confirm("Update the loaded preset too?", false);
     if !should_update {
         return Ok(());
     }
