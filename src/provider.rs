@@ -192,7 +192,7 @@ pub fn call_llm_with_fallback(
     diff: &str,
 ) -> Result<(String, Option<String>)> {
     match call_llm_inner(cfg, system_prompt, diff) {
-        Ok(msg) => return Ok((msg, None)),
+        Ok(msg) => Ok((msg, None)),
         Err(LlmCallError::TransportError(msg)) => {
             anyhow::bail!("Network error: {msg}");
         }

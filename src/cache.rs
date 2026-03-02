@@ -220,12 +220,9 @@ pub fn interactive_history() -> Result<()> {
             }
 
             let options: Vec<String> = index.repos.iter().map(|e| e.repo_path.clone()).collect();
-            match Select::new("Select repository:", options).prompt() {
-                Ok(repo_path) => {
-                    let cache = load_repo_cache(&repo_path)?;
-                    show_repo_commits(&cache)?;
-                }
-                Err(_) => {}
+            if let Ok(repo_path) = Select::new("Select repository:", options).prompt() {
+                let cache = load_repo_cache(&repo_path)?;
+                show_repo_commits(&cache)?;
             }
         }
     }

@@ -277,7 +277,7 @@ pub fn interactive_presets() -> Result<()> {
             }
             "Manage existing preset..." => {
                 let options: Vec<String> =
-                    file.presets.iter().map(|p| preset_display(p)).collect();
+                    file.presets.iter().map(preset_display).collect();
                 let Ok(choice) = Select::new("Select preset:", options.clone()).prompt() else {
                     continue;
                 };
@@ -516,7 +516,7 @@ pub fn select_and_load_preset(cfg: &mut AppConfig) -> Result<Option<(u32, LlmPre
         println!("  {}", "No presets found.".dimmed());
         return Ok(None);
     }
-    let options: Vec<String> = file.presets.iter().map(|p| preset_display(p)).collect();
+    let options: Vec<String> = file.presets.iter().map(preset_display).collect();
     match Select::new("Select preset to load:", options.clone()).prompt() {
         Ok(choice) => {
             let idx = options.iter().position(|o| o == &choice).unwrap();

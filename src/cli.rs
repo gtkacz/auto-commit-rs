@@ -338,10 +338,9 @@ pub fn interactive_config(global: bool) -> Result<()> {
                 show_descriptions = !show_descriptions;
             }
             MenuAction::Search => {
-                if let Some(query) = Text::new("Search:")
+                if let Ok(query) = Text::new("Search:")
                     .with_help_message("Enter text to search for in setting names")
                     .prompt()
-                    .ok()
                 {
                     let query_lower = query.to_lowercase();
                     if !query_lower.is_empty() {
