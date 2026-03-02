@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 
+
+### Changed
+
+- 
+
+### Fixed
+
+- 
+
+### Removed
+
+-
+
+## [1.2.0] - 2026-03-02
+
+### Added
+
+- `ACR_DIFF_EXCLUDE_GLOBS` configuration: exclude files from LLM analysis by glob pattern while still committing them
+- Default exclusion patterns for common binary/generated files: `*.json`, `*.xml`, `*.csv`, `*.pdf`, `*.lock`, images, fonts, minified assets
+- Seven new built-in LLM providers: **Grok**, **DeepSeek**, **OpenRouter**, **Mistral**, **Together**, **Fireworks**, **Perplexity**
 - LLM presets: save, load, rename, duplicate, delete, export/import reusable provider configurations via `cgen config`
 - Fallback order: automatic retry with alternate LLM presets when the primary provider returns an HTTP error
 - `ACR_FALLBACK_ENABLED` configuration flag (default: enabled) to toggle LLM fallback behavior
@@ -26,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ACR_AUTO_UPDATE` is now a global-only setting and will not be written to local `.env` files
 - `call_llm` now uses `call_llm_with_fallback` internally, enabling automatic provider retry
 - `generate_final_message` reports which fallback preset was used (if any)
 - Config menu now includes preset and fallback management entries
@@ -36,10 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cursor no longer resets to top of view when collapsing headers on the `cgen config` view
-
-### Removed
-
--
 
 ## [1.1.0] - 2026-02-24
 

@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use glob::Pattern;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -478,4 +479,56 @@ fn parse_semver_tag(tag: &str) -> Result<(u64, u64, u64)> {
         .with_context(|| format!("Latest tag '{tag}' is not valid semantic versioning."))?;
 
     Ok((major, minor, patch))
+}
+
+/// Filter unified diff to exclude files matching glob patterns.
+/// Files matching any pattern are removed from the diff output but will still be committed.
+pub fn filter_diff_by_globs(diff: &str, exclude_patterns: &[String]) -> String {
+    if exclude_patterns.is_empty() {
+        return diff.to_string();
+    }
+
+    let patterns: Vec<Pattern> = exclude_patterns
+        .iter()
+        .filter_map(|p| Pattern::new(p).ok())
+        .collect();
+
+    if patterns.is_empty() {
+        return diff.to_string();
+    }
+
+    let mut result = String::new();
+    let mut include_current = true;
+
+    for line in diff.lines() {
+        if line.starts_with("diff --git ") {
+            // Extract path: "diff --git a/path b/path" -> "path"
+            let file_path = line
+                .strip_prefix("diff --git a/")
+                .and_then(|s| s.split(" b/").next())
+                .unwrap_or("");
+
+            // Check only the filename, not the full path
+            let filename = std::path::Path::new(file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(file_path);
+
+            include_current = !patterns.iter().any(|p| p.matches(filename));
+        }
+
+        if include_current {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    result
+}
+
+/// Get staged diff with files filtered by glob patterns.
+/// Excluded files are still committed, just not sent to the LLM for analysis.
+pub fn get_staged_diff_filtered(exclude_patterns: &[String]) -> Result<String> {
+    let diff = get_staged_diff()?;
+    Ok(filter_diff_by_globs(&diff, exclude_patterns))
 }

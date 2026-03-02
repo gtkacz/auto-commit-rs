@@ -6,8 +6,8 @@ fn prompt_includes_core_sections_by_default() {
     let cfg = AppConfig::default();
     let prompt = build_system_prompt(&cfg);
 
-    assert!(prompt.contains("Follow the Conventional Commits specification"));
-    assert!(prompt.contains("Output ONLY a single line."));
+    assert!(prompt.contains("following the Conventional Commits specification"));
+    assert!(prompt.contains("single sentence"));
     assert!(prompt.contains("Output only the raw commit message"));
     assert!(!prompt.contains("Use Gitmoji"));
     assert!(!prompt.contains("locale."));

@@ -62,6 +62,8 @@ pub struct AppConfig {
     pub fallback_enabled: bool,
     #[serde(default = "default_true")]
     pub track_generated_commits: bool,
+    #[serde(default = "default_diff_exclude_globs")]
+    pub diff_exclude_globs: Vec<String>,
 }
 
 fn default_provider() -> String {
@@ -91,6 +93,16 @@ fn default_gitmoji_format() -> String {
 fn default_warn_staged_files_threshold() -> usize {
     20
 }
+fn default_diff_exclude_globs() -> Vec<String> {
+    vec![
+        "*.json", "*.xml", "*.csv", "*.pdf", "*.lock",
+        "*.svg", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico",
+        "*.woff", "*.woff2", "*.ttf", "*.eot", "*.min.js", "*.min.css",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -115,6 +127,7 @@ impl Default for AppConfig {
             auto_update: None,
             fallback_enabled: true,
             track_generated_commits: true,
+            diff_exclude_globs: default_diff_exclude_globs(),
         }
     }
 }
@@ -141,6 +154,7 @@ const ENV_FIELD_MAP: &[(&str, &str)] = &[
     ("AUTO_UPDATE", "auto_update"),
     ("FALLBACK_ENABLED", "fallback_enabled"),
     ("TRACK_GENERATED_COMMITS", "track_generated_commits"),
+    ("DIFF_EXCLUDE_GLOBS", "diff_exclude_globs"),
 ];
 
 impl AppConfig {
@@ -164,7 +178,7 @@ impl AppConfig {
             let env_path = PathBuf::from(&root).join(".env");
             if env_path.exists() {
                 let env_map = parse_dotenv(&env_path)?;
-                cfg.apply_env_map(&env_map);
+                cfg.apply_env_map(&env_map, true);
             }
         }
 
@@ -176,7 +190,7 @@ impl AppConfig {
                 env_map.insert(key, val);
             }
         }
-        cfg.apply_env_map(&env_map);
+        cfg.apply_env_map(&env_map, false);
         cfg.ensure_valid_locale()?;
 
         Ok(cfg)
@@ -225,9 +239,12 @@ impl AppConfig {
         }
         self.fallback_enabled = other.fallback_enabled;
         self.track_generated_commits = other.track_generated_commits;
+        if !other.diff_exclude_globs.is_empty() {
+            self.diff_exclude_globs = other.diff_exclude_globs.clone();
+        }
     }
 
-    fn apply_env_map(&mut self, map: &HashMap<String, String>) {
+    fn apply_env_map(&mut self, map: &HashMap<String, String>, from_local: bool) {
         for (suffix, _field) in ENV_FIELD_MAP {
             let key = format!("ACR_{suffix}");
             if let Some(val) = map.get(&key) {
@@ -264,7 +281,10 @@ impl AppConfig {
                         self.confirm_new_version = val == "1" || val.eq_ignore_ascii_case("true")
                     }
                     "AUTO_UPDATE" => {
-                        self.auto_update = Some(val == "1" || val.eq_ignore_ascii_case("true"));
+                        // auto_update is global-only; skip when reading from local .env
+                        if !from_local {
+                            self.auto_update = Some(val == "1" || val.eq_ignore_ascii_case("true"));
+                        }
                     }
                     "FALLBACK_ENABLED" => {
                         self.fallback_enabled = val == "1" || val.eq_ignore_ascii_case("true");
@@ -272,6 +292,13 @@ impl AppConfig {
                     "TRACK_GENERATED_COMMITS" => {
                         self.track_generated_commits =
                             val == "1" || val.eq_ignore_ascii_case("true");
+                    }
+                    "DIFF_EXCLUDE_GLOBS" => {
+                        self.diff_exclude_globs = val
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
                     }
                     _ => {}
                 }
@@ -353,12 +380,7 @@ impl AppConfig {
             "ACR_CONFIRM_NEW_VERSION={}",
             if self.confirm_new_version { "1" } else { "0" }
         ));
-        if let Some(auto_update) = self.auto_update {
-            lines.push(format!(
-                "ACR_AUTO_UPDATE={}",
-                if auto_update { "1" } else { "0" }
-            ));
-        }
+        // auto_update is global-only, not written to local .env
         lines.push(format!(
             "ACR_FALLBACK_ENABLED={}",
             if self.fallback_enabled { "1" } else { "0" }
@@ -371,6 +393,12 @@ impl AppConfig {
                 "0"
             }
         ));
+        if !self.diff_exclude_globs.is_empty() {
+            lines.push(format!(
+                "ACR_DIFF_EXCLUDE_GLOBS={}",
+                self.diff_exclude_globs.join(",")
+            ));
+        }
 
         std::fs::write(&env_path, lines.join("\n") + "\n")
             .with_context(|| format!("Failed to write {}", env_path.display()))?;
@@ -516,6 +544,15 @@ impl AppConfig {
                     "disabled".into()
                 },
             ),
+            (
+                "Diff Exclude Globs",
+                "DIFF_EXCLUDE_GLOBS",
+                if self.diff_exclude_globs.is_empty() {
+                    "(none)".into()
+                } else {
+                    self.diff_exclude_globs.join(", ")
+                },
+            ),
         ]
     }
 
@@ -534,6 +571,7 @@ impl AppConfig {
             "LLM_SYSTEM_PROMPT",
             "COMMIT_TEMPLATE",
             "FALLBACK_ENABLED",
+            "DIFF_EXCLUDE_GLOBS",
         ];
         let commit_keys: &[&'static str] = &[
             "ONE_LINER",
@@ -630,6 +668,13 @@ impl AppConfig {
             }
             "TRACK_GENERATED_COMMITS" => {
                 self.track_generated_commits = value == "1" || value.eq_ignore_ascii_case("true");
+            }
+            "DIFF_EXCLUDE_GLOBS" => {
+                self.diff_exclude_globs = value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             _ => {}
         }
@@ -774,7 +819,7 @@ fn locale_exists_in_i18n_dir(i18n_dir: &PathBuf, locale: &str) -> bool {
 /// Get description for a field by its env suffix
 pub fn field_description(suffix: &str) -> &'static str {
     match suffix {
-        "PROVIDER" => "LLM provider (gemini, openai, anthropic, groq, or custom)",
+        "PROVIDER" => "LLM provider (gemini, openai, anthropic, groq, grok, deepseek, openrouter, mistral, together, fireworks, perplexity, or custom)",
         "MODEL" => "Model identifier for the selected provider",
         "API_KEY" => "API key for authenticating with the LLM provider",
         "API_URL" => "Custom API endpoint URL (leave empty to use provider default)",
@@ -794,6 +839,7 @@ pub fn field_description(suffix: &str) -> &'static str {
         "AUTO_UPDATE" => "Automatically update cgen when new versions are available",
         "FALLBACK_ENABLED" => "Try fallback presets if primary LLM call fails",
         "TRACK_GENERATED_COMMITS" => "Track commits generated by cgen for history view",
+        "DIFF_EXCLUDE_GLOBS" => "Comma-separated glob patterns for files to exclude from LLM diff analysis (e.g., *.json,*.lock)",
         _ => "",
     }
 }

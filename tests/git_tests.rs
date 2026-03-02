@@ -216,3 +216,72 @@ fn reword_non_head_commit_works() {
     let content = std::fs::read_to_string(repo.path().join("a.txt")).expect("read file");
     assert_eq!(content, "3");
 }
+
+#[test]
+fn filter_diff_by_globs_excludes_matching_files() {
+    let diff = r#"diff --git a/src/main.rs b/src/main.rs
+index 1234567..abcdefg 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,3 +1,4 @@
+ fn main() {
++    println!("Hello");
+ }
+diff --git a/package.json b/package.json
+index aaaaaaa..bbbbbbb 100644
+--- a/package.json
++++ b/package.json
+@@ -1,3 +1,4 @@
+ {
++  "name": "test"
+ }
+diff --git a/data.csv b/data.csv
+index ccccccc..ddddddd 100644
+--- a/data.csv
++++ b/data.csv
+@@ -1,2 +1,3 @@
+ a,b,c
++1,2,3
+"#;
+
+    // Exclude *.json and *.csv
+    let patterns = vec!["*.json".to_string(), "*.csv".to_string()];
+    let filtered = git::filter_diff_by_globs(diff, &patterns);
+
+    // Should contain main.rs changes
+    assert!(filtered.contains("src/main.rs"));
+    assert!(filtered.contains("println!"));
+
+    // Should NOT contain package.json or data.csv
+    assert!(!filtered.contains("package.json"));
+    assert!(!filtered.contains("data.csv"));
+}
+
+#[test]
+fn filter_diff_by_globs_returns_full_diff_when_no_patterns() {
+    let diff = "diff --git a/foo.json b/foo.json\n+test\n";
+    let filtered = git::filter_diff_by_globs(diff, &[]);
+    assert_eq!(filtered, diff);
+}
+
+#[test]
+fn filter_diff_by_globs_handles_nested_paths() {
+    let diff = r#"diff --git a/deep/nested/config.json b/deep/nested/config.json
+--- a/deep/nested/config.json
++++ b/deep/nested/config.json
+@@ -1 +1,2 @@
++{"key": "value"}
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1 +1,2 @@
++// code
+"#;
+
+    let patterns = vec!["*.json".to_string()];
+    let filtered = git::filter_diff_by_globs(diff, &patterns);
+
+    // Should contain lib.rs but not the nested json file
+    assert!(filtered.contains("src/lib.rs"));
+    assert!(!filtered.contains("config.json"));
+}

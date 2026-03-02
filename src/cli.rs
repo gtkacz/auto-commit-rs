@@ -377,7 +377,20 @@ pub fn interactive_config(global: bool) -> Result<()> {
 fn edit_field(suffix: &str, cfg: &AppConfig) -> Option<String> {
     match suffix {
         "PROVIDER" => {
-            let choices = vec!["gemini", "openai", "anthropic", "groq", "(custom)"];
+            let choices = vec![
+                "gemini",
+                "openai",
+                "anthropic",
+                "groq",
+                "grok",
+                "deepseek",
+                "openrouter",
+                "mistral",
+                "together",
+                "fireworks",
+                "perplexity",
+                "(custom)",
+            ];
             match Select::new("Provider:", choices).prompt() {
                 Ok("(custom)") => Text::new("Custom provider name:").prompt().ok(),
                 Ok(v) => Some(v.to_string()),
@@ -469,6 +482,11 @@ fn edit_field(suffix: &str, cfg: &AppConfig) -> Option<String> {
         }
         "API_KEY" => Text::new("API Key:")
             .with_help_message("Your LLM provider API key")
+            .prompt()
+            .ok(),
+        "DIFF_EXCLUDE_GLOBS" => Text::new("Diff Exclude Globs:")
+            .with_help_message("Comma-separated glob patterns (e.g., *.json,*.lock,*.png)")
+            .with_default(&cfg.diff_exclude_globs.join(","))
             .prompt()
             .ok(),
         _ => {

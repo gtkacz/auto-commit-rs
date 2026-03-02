@@ -111,7 +111,7 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ACR_PROVIDER` | `groq` | LLM provider (`groq`, `openai`, `anthropic`, `gemini`, or custom) |
+| `ACR_PROVIDER` | `groq` | LLM provider (`groq`, `openai`, `anthropic`, `gemini`, `grok`, `deepseek`, `openrouter`, `mistral`, `together`, `fireworks`, `perplexity`, or custom) |
 | `ACR_MODEL` | `llama-3.3-70b-versatile` | Model name |
 | `ACR_API_KEY` |, | API key (required) |
 | `ACR_API_URL` | auto | API endpoint (auto-resolved from provider) |
@@ -131,6 +131,23 @@ All settings use the `ACR_` prefix. Layered resolution: defaults → global TOML
 | `ACR_AUTO_UPDATE` |, | Enable automatic updates (`1`/`0`); prompts on first run if unset |
 | `ACR_FALLBACK_ENABLED` | `1` | Try fallback presets when primary LLM fails (`1`/`0`) |
 | `ACR_TRACK_GENERATED_COMMITS` | `1` | Track AI-generated commits per repository (`1`/`0`) |
+| `ACR_DIFF_EXCLUDE_GLOBS` | (see below) | Comma-separated glob patterns for files to exclude from LLM analysis |
+
+### Diff Exclusion Patterns
+
+`ACR_DIFF_EXCLUDE_GLOBS` filters files from the diff sent to the LLM while still committing them. This reduces noise and token usage for binary, generated, or data files. Default patterns:
+
+```
+*.json, *.xml, *.csv, *.pdf, *.lock, *.svg, *.png, *.jpg, *.jpeg, *.gif, *.ico, *.woff, *.woff2, *.ttf, *.eot, *.min.js, *.min.css
+```
+
+Override with a comma-separated list:
+
+```sh
+export ACR_DIFF_EXCLUDE_GLOBS="*.lock,*.svg,package-lock.json"
+```
+
+Note: `ACR_AUTO_UPDATE` is a global-only setting and is not written to local `.env` files.
 
 ### Config Locations
 
@@ -215,7 +232,21 @@ When `ACR_TRACK_GENERATED_COMMITS=1` (default), cgen records each AI-generated c
 
 ## Providers
 
-Built-in providers: **Groq** (default), **OpenAI**, **Anthropic**, **Gemini**.
+Built-in providers: **Groq** (default), **OpenAI**, **Anthropic**, **Gemini**, **Grok**, **DeepSeek**, **OpenRouter**, **Mistral**, **Together**, **Fireworks**, **Perplexity**.
+
+| Provider | Default Model |
+|----------|---------------|
+| groq | llama-3.3-70b-versatile |
+| openai | gpt-4o-mini |
+| anthropic | claude-sonnet-4-20250514 |
+| gemini | gemini-2.0-flash |
+| grok | grok-3 |
+| deepseek | deepseek-chat |
+| openrouter | openai/gpt-4o-mini |
+| mistral | mistral-small-latest |
+| together | meta-llama/Llama-3.3-70B-Instruct-Turbo |
+| fireworks | accounts/fireworks/models/llama-v3p3-70b-instruct |
+| perplexity | sonar |
 
 For custom providers, set `ACR_PROVIDER` to any name and provide `ACR_API_URL`. Custom providers default to OpenAI-compatible request format.
 

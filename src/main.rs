@@ -106,7 +106,8 @@ fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
         }
     }
 
-    let diff = git::get_staged_diff().context("Failed to get staged diff")?;
+    let diff = git::get_staged_diff_filtered(&cfg.diff_exclude_globs)
+        .context("Failed to get staged diff")?;
     let Some(final_msg) = generate_final_message(cfg, &diff, cli.verbose)? else {
         return Ok(());
     };
