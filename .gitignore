@@ -27,4 +27,5 @@ target
 !CHANGELOG.md
 !data/conventions/*.md
 .serena/
-.chunkhound/
+.chunkhound/*
+.chunkhound.json
