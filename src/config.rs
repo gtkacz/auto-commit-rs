@@ -14,9 +14,11 @@ pub struct FieldGroup {
     pub subgroups: Vec<FieldSubgroup>,
 }
 
-const DEFAULT_SYSTEM_PROMPT: &str = "You are to act as an author of a commit message in git. \
-I'll send you an output of 'git diff --staged' command, and you are to convert \
-it into a commit message. Follow the Conventional Commits specification.";
+const DEFAULT_SYSTEM_PROMPT: &str = "You are to act as an author of a commit message in git.
+Your mission is to create clean and comprehensive commit messages as per
+the Conventional Commit specification and explain WHAT were the changes and mainly WHY the changes were done.
+I'll send you an output of 'git diff --staged' command, and you are to convert
+it into a commit message. Use the present tense.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -262,8 +264,7 @@ impl AppConfig {
                         self.confirm_new_version = val == "1" || val.eq_ignore_ascii_case("true")
                     }
                     "AUTO_UPDATE" => {
-                        self.auto_update =
-                            Some(val == "1" || val.eq_ignore_ascii_case("true"));
+                        self.auto_update = Some(val == "1" || val.eq_ignore_ascii_case("true"));
                     }
                     "FALLBACK_ENABLED" => {
                         self.fallback_enabled = val == "1" || val.eq_ignore_ascii_case("true");
@@ -549,16 +550,11 @@ impl AppConfig {
             "AUTO_UPDATE",
         ];
 
-        let collect =
-            |keys: &[&'static str]| -> Vec<(&'static str, &'static str, String)> {
-                keys.iter()
-                    .filter_map(|k| {
-                        field_map
-                            .get(k)
-                            .map(|(name, val)| (*name, *k, val.clone()))
-                    })
-                    .collect()
-            };
+        let collect = |keys: &[&'static str]| -> Vec<(&'static str, &'static str, String)> {
+            keys.iter()
+                .filter_map(|k| field_map.get(k).map(|(name, val)| (*name, *k, val.clone())))
+                .collect()
+        };
 
         vec![
             FieldGroup {
