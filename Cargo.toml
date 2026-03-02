@@ -19,16 +19,16 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-colored = "2"
+colored = "3"
 dirs = "6"
 dotenvy = "0.15"
-indicatif = "0.17"
-inquire = "0.7"
+indicatif = "0.18"
+inquire = "0.9"
 regex-lite = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
-ureq = { version = "2", features = ["json"] }
+toml = "1.0"
+ureq = { version = "3", features = ["json"] }
 glob = "0.3"
 
 [dev-dependencies]
