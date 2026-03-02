@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -
 
+## [1.2.1] - 2026-03-02
+
+
+### Fixed
+
+- Gitmoji spec no longer overrides the Conventional Commit spec
+- When editing a LLM-generated message you start editing from the existing message
+
+
 ## [1.2.0] - 2026-03-02
 
 ### Added

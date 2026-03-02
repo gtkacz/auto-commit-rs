@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use auto_commit_rs::{cache, cli, config, git, preset, prompt, provider, ui, update};
 use colored::Colorize;
-use inquire::{Select, Text};
+use inquire::{Select};
 use std::time::Instant;
 
 fn main() {
@@ -297,10 +297,8 @@ fn generate_final_message(
                     }
                 }
                 ReviewAction::Edit => {
-                    let edited = Text::new("Edit commit message:")
-                        .with_default(&candidate)
-                        .prompt()?;
-                    break edited;
+                    let edited = edit::edit(&candidate)?;
+                    break edited.trim().to_string();
                 }
                 ReviewAction::Cancel => {
                     println!("{}", "Commit cancelled.".dimmed());
