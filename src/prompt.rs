@@ -51,7 +51,7 @@ pub fn build_system_prompt(cfg: &AppConfig) -> String {
 
     // One-liner
     if cfg.one_liner {
-        parts.push("Craft a concise, single sentence, commit message that encapsulates all changes made, with an emphasis on the primary updates. If the modifications share a common theme or scope, mention it succinctly; otherwise, leave the scope out to maintain focus. The goal is to provide a clear and unified overview of the changes in one single message.".to_string());
+        parts.push("Craft a concise, single sentence, commit message that encapsulates all changes made, with an emphasis on the primary updates. If the modifications share a common theme or scope, mention it succinctly; otherwise, leave the scope out to maintain focus. The goal is to provide a clear and unified overview of the changes in one single message. Output ONLY a single-line commit message in the format: type[optional scope]: description. Do NOT include a body or footer. The entire commit message must fit on one line.".to_string());
     }
 
     // Locale

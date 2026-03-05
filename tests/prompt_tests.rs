@@ -7,7 +7,7 @@ fn prompt_includes_core_sections_by_default() {
     let prompt = build_system_prompt(&cfg);
 
     assert!(prompt.contains("following the Conventional Commits specification"));
-    assert!(prompt.contains("single sentence"));
+    assert!(prompt.contains("Output ONLY a single-line commit message"));
     assert!(prompt.contains("Output only the raw commit message"));
     assert!(!prompt.contains("Use Gitmoji"));
     assert!(!prompt.contains("locale."));
@@ -35,7 +35,7 @@ fn prompt_includes_shortcode_gitmoji_and_locale_when_configured() {
     let prompt = build_system_prompt(&cfg);
     assert!(prompt.contains("relevant emoji in :shortcode: format"));
     assert!(prompt.contains("Write the commit message in the 'pl' locale."));
-    assert!(!prompt.contains("Output ONLY a single line."));
+    assert!(!prompt.contains("Output ONLY a single-line commit message"));
 }
 
 #[test]
