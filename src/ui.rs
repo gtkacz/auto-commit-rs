@@ -21,8 +21,9 @@ pub fn strip_tree_chars(s: &str) -> String {
         .filter(|c| {
             !matches!(
                 c,
-                '\u{2500}'..='\u{257F}' | // Box Drawing block
-                '\u{25B6}' | '\u{25BC}'   // Arrows ▶ ▼
+                '\u{2500}'
+                    ..='\u{257F}' | // Box Drawing block
+                '\u{25B6}' | '\u{25BC}' // Arrows ▶ ▼
             )
         })
         .collect::<String>()

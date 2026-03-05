@@ -1,8 +1,8 @@
 mod common;
 
+use crate::common::EnvGuard;
 use auto_commit_rs::config::AppConfig;
 use auto_commit_rs::provider;
-use crate::common::EnvGuard;
 use mockito::{Matcher, Server};
 use serial_test::serial;
 use std::fs;
@@ -19,7 +19,10 @@ fn cfg_for(provider_name: &str, api_url: String) -> AppConfig {
 #[test]
 fn default_model_for_returns_known_and_unknown_defaults() {
     assert_eq!(provider::default_model_for("openai"), "gpt-4o-mini");
-    assert_eq!(provider::default_model_for("groq"), "llama-3.3-70b-versatile");
+    assert_eq!(
+        provider::default_model_for("groq"),
+        "llama-3.3-70b-versatile"
+    );
     assert_eq!(provider::default_model_for("unknown"), "");
 }
 
@@ -173,7 +176,7 @@ fn call_llm_interpolates_custom_headers_and_url_variables() {
 #[serial]
 fn call_llm_with_fallback_tries_next_preset() {
     let mut server = Server::new();
-    
+
     // Primary fails
     let mock_primary = server
         .mock("POST", "/primary")
@@ -193,17 +196,16 @@ fn call_llm_with_fallback_tries_next_preset() {
 
     // Setup presets file
     let cfg_dir = tempfile::TempDir::new().expect("tempdir");
-    let _env = EnvGuard::set(&[
-        ("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref()),
-    ]);
-    
+    let _env = EnvGuard::set(&[("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref())]);
+
     // Create cgen dir inside config home
     let cgen_dir = cfg_dir.path().join("cgen");
     fs::create_dir_all(&cgen_dir).expect("create cgen dir");
 
     let fallback_url = format!("{}/fallback", server.url());
-    
-    let presets_toml = format!(r#"
+
+    let presets_toml = format!(
+        r#"
 next_id = 1
 [[presets]]
 id = 0
@@ -217,15 +219,18 @@ api_headers = ""
 [fallback]
 enabled = true
 order = [0]
-"#, fallback_url);
+"#,
+        fallback_url
+    );
 
     fs::write(cgen_dir.join("presets.toml"), presets_toml).expect("write presets");
 
-    let (msg, preset_name) = provider::call_llm_with_fallback(&cfg, "system", "diff").expect("llm call with fallback");
-    
+    let (msg, preset_name) =
+        provider::call_llm_with_fallback(&cfg, "system", "diff").expect("llm call with fallback");
+
     assert_eq!(msg, "fallback success");
     assert_eq!(preset_name, Some("fallback-preset".to_string()));
-    
+
     mock_primary.assert();
     mock_fallback.assert();
 }
@@ -446,10 +451,7 @@ fn call_llm_fallback_empty_order_returns_error() {
         .create();
 
     let cfg_dir = tempfile::TempDir::new().expect("tempdir");
-    let _env = EnvGuard::set(&[(
-        "ACR_CONFIG_HOME",
-        cfg_dir.path().to_string_lossy().as_ref(),
-    )]);
+    let _env = EnvGuard::set(&[("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref())]);
 
     // Create empty presets file
     let cgen_dir = cfg_dir.path().join("cgen");

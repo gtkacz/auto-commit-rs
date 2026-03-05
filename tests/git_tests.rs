@@ -26,7 +26,9 @@ fn staged_diff_and_files_behave_for_empty_and_non_empty_index() {
     let _cwd = DirGuard::enter(repo.path());
 
     assert!(git::get_staged_diff().is_err());
-    assert!(git::list_staged_files().expect("list staged files").is_empty());
+    assert!(git::list_staged_files()
+        .expect("list staged files")
+        .is_empty());
 
     write_file(&repo.path().join("src.txt"), "hello");
     git_ok(repo.path(), ["add", "src.txt"]);
@@ -157,7 +159,10 @@ fn commit_is_merge_detects_merge_commits() {
     // Merge feature into main_branch
     // We might need to configure user email/name which init_git_repo does.
     // We use --no-ff to force a merge commit
-    git_ok(repo.path(), ["merge", "--no-ff", "feature", "-m", "merge commit"]);
+    git_ok(
+        repo.path(),
+        ["merge", "--no-ff", "feature", "-m", "merge commit"],
+    );
 
     let merge_commit = git_stdout(repo.path(), ["rev-parse", "HEAD"]);
 
@@ -207,7 +212,7 @@ fn reword_non_head_commit_works() {
 
     git::rewrite_commit_message(&c2, "new message", true).expect("rewrite should succeed");
 
-    // Verify c2 message is changed. 
+    // Verify c2 message is changed.
     // Since history changed, we look at HEAD~1
     let msg = git_stdout(repo.path(), ["log", "-1", "--pretty=%s", "HEAD~1"]);
     assert_eq!(msg, "new message");

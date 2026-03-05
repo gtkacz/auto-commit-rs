@@ -64,8 +64,7 @@ fn load_index() -> Result<CacheIndex> {
 
 fn save_index(index: &CacheIndex) -> Result<()> {
     let dir = cache_dir().context("Could not determine cache directory")?;
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("Failed to create {}", dir.display()))?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
     let path = dir.join("index.toml");
     let content = toml::to_string_pretty(index).context("Failed to serialize cache index")?;
     let tmp_path = path.with_extension("toml.tmp");
@@ -103,8 +102,7 @@ fn load_repo_cache(repo_path: &str) -> Result<RepoCache> {
 
 fn save_repo_cache(cache: &RepoCache) -> Result<()> {
     let dir = cache_dir().context("Could not determine cache directory")?;
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("Failed to create {}", dir.display()))?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
     let hash = repo_path_hash(&cache.repo_path);
     let path = dir.join(format!("{hash}.toml"));
     let content = toml::to_string_pretty(cache).context("Failed to serialize repo cache")?;

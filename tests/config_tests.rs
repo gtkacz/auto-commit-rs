@@ -316,7 +316,10 @@ fn grouped_fields_has_basic_and_advanced_groups() {
     // Basic has 4 direct fields
     assert_eq!(groups[0].fields.len(), 4);
     let basic_suffixes: Vec<&str> = groups[0].fields.iter().map(|(_, s, _)| *s).collect();
-    assert_eq!(basic_suffixes, vec!["PROVIDER", "MODEL", "API_KEY", "API_URL"]);
+    assert_eq!(
+        basic_suffixes,
+        vec!["PROVIDER", "MODEL", "API_KEY", "API_URL"]
+    );
 
     // Advanced has 4 subgroups
     assert_eq!(groups[1].subgroups.len(), 4);
@@ -457,10 +460,7 @@ fn set_field_diff_exclude_globs() {
 
     cfg.set_field("DIFF_EXCLUDE_GLOBS", "*.json, *.lock, *.svg")
         .unwrap();
-    assert_eq!(
-        cfg.diff_exclude_globs,
-        vec!["*.json", "*.lock", "*.svg"]
-    );
+    assert_eq!(cfg.diff_exclude_globs, vec!["*.json", "*.lock", "*.svg"]);
 
     cfg.set_field("DIFF_EXCLUDE_GLOBS", "").unwrap();
     assert!(cfg.diff_exclude_globs.is_empty());
@@ -562,10 +562,7 @@ fn fields_display_api_key_empty() {
 #[serial]
 fn save_global_creates_directory_and_file() {
     let cfg_dir = tempfile::TempDir::new().expect("tempdir");
-    let _env = EnvGuard::set(&[(
-        "ACR_CONFIG_HOME",
-        cfg_dir.path().to_string_lossy().as_ref(),
-    )]);
+    let _env = EnvGuard::set(&[("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref())]);
 
     let cfg = AppConfig::default();
     cfg.save_global().expect("save global should succeed");

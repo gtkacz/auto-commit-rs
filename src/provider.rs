@@ -137,7 +137,11 @@ impl std::fmt::Display for LlmCallError {
     }
 }
 
-fn call_llm_inner(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<String, LlmCallError> {
+fn call_llm_inner(
+    cfg: &AppConfig,
+    system_prompt: &str,
+    diff: &str,
+) -> Result<String, LlmCallError> {
     let (url, headers_raw, format, response_path) =
         resolve_provider(cfg).map_err(LlmCallError::Other)?;
 
@@ -177,9 +181,9 @@ fn call_llm_inner(cfg: &AppConfig, system_prompt: &str, diff: &str) -> Result<St
         }
     };
 
-    let json: Value = response
-        .into_json()
-        .map_err(|e| LlmCallError::Other(anyhow::anyhow!("Failed to parse API response as JSON: {e}")))?;
+    let json: Value = response.into_json().map_err(|e| {
+        LlmCallError::Other(anyhow::anyhow!("Failed to parse API response as JSON: {e}"))
+    })?;
 
     let message = extract_message(&json, format, &response_path).map_err(|e| {
         LlmCallError::Other(anyhow::anyhow!(
@@ -262,10 +266,7 @@ pub fn call_llm_with_fallback(
                 }
             }
 
-            anyhow::bail!(
-                "All LLM providers failed: {}",
-                errors.join(", ")
-            );
+            anyhow::bail!("All LLM providers failed: {}", errors.join(", "));
         }
         Err(LlmCallError::Other(e)) => {
             anyhow::bail!("{e}");
@@ -559,7 +560,10 @@ mod tests {
             "system prompt",
             "user diff",
         );
-        assert_eq!(body["system_instruction"]["parts"][0]["text"], "system prompt");
+        assert_eq!(
+            body["system_instruction"]["parts"][0]["text"],
+            "system prompt"
+        );
         assert_eq!(body["contents"][0]["role"], "user");
         assert_eq!(body["contents"][0]["parts"][0]["text"], "user diff");
         assert_eq!(body["generationConfig"]["temperature"], 0);
@@ -619,7 +623,9 @@ mod tests {
     fn test_get_provider_gemini_format() {
         let provider = get_provider("gemini").unwrap();
         assert_eq!(provider.format, RequestFormat::Gemini);
-        assert!(provider.api_url.contains("generativelanguage.googleapis.com"));
+        assert!(provider
+            .api_url
+            .contains("generativelanguage.googleapis.com"));
         assert_eq!(provider.default_model, "gemini-2.0-flash");
     }
 
@@ -645,7 +651,11 @@ mod tests {
             "perplexity",
         ] {
             let provider = get_provider(name).unwrap();
-            assert_eq!(provider.format, RequestFormat::OpenAiCompat, "Provider {name} should use OpenAiCompat format");
+            assert_eq!(
+                provider.format,
+                RequestFormat::OpenAiCompat,
+                "Provider {name} should use OpenAiCompat format"
+            );
         }
     }
 
@@ -782,9 +792,6 @@ mod tests {
         });
         let result = extract_message(&json, RequestFormat::LmStudio, "output");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("type 'message'"));
+        assert!(result.unwrap_err().to_string().contains("type 'message'"));
     }
 }

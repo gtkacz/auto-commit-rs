@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use auto_commit_rs::{cache, cli, config, git, preset, prompt, provider, ui, update};
 use colored::Colorize;
-use inquire::{Select};
+use inquire::Select;
 use std::time::Instant;
 
 fn main() {
@@ -110,12 +110,18 @@ fn run_standard_commit(cfg: &config::AppConfig, cli: &cli::Cli) -> Result<()> {
     let gen_start = Instant::now();
     let diff = git::get_staged_diff_filtered(&cfg.diff_exclude_globs)
         .context("Failed to get staged diff")?;
-    let Some((final_msg, time_to_ready)) = generate_final_message(cfg, &diff, cli.verbose, gen_start)? else {
+    let Some((final_msg, time_to_ready)) =
+        generate_final_message(cfg, &diff, cli.verbose, gen_start)?
+    else {
         return Ok(());
     };
     if cli.verbose {
         if let Some(elapsed) = time_to_ready {
-            println!("  {} {}", "Generated in".dimmed(), format!("{:.2}s", elapsed.as_secs_f64()).dimmed());
+            println!(
+                "  {} {}",
+                "Generated in".dimmed(),
+                format!("{:.2}s", elapsed.as_secs_f64()).dimmed()
+            );
         }
     }
 
@@ -176,12 +182,18 @@ fn run_alter(cfg: &config::AppConfig, cli: &cli::Cli, commits: &[String]) -> Res
     }
 
     let gen_start = Instant::now();
-    let Some((final_msg, time_to_ready)) = generate_final_message(cfg, &diff, cli.verbose, gen_start)? else {
+    let Some((final_msg, time_to_ready)) =
+        generate_final_message(cfg, &diff, cli.verbose, gen_start)?
+    else {
         return Ok(());
     };
     if cli.verbose {
         if let Some(elapsed) = time_to_ready {
-            println!("  {} {}", "Generated in".dimmed(), format!("{:.2}s", elapsed.as_secs_f64()).dimmed());
+            println!(
+                "  {} {}",
+                "Generated in".dimmed(),
+                format!("{:.2}s", elapsed.as_secs_f64()).dimmed()
+            );
         }
     }
 
@@ -257,9 +269,8 @@ fn generate_final_message(
         println!("\n{}", "LLM system prompt:".cyan().bold());
         println!("{system_prompt}\n");
     }
-    let (raw_message, fallback_name) =
-        provider::call_llm_with_fallback(cfg, &system_prompt, diff)
-            .context("LLM API call failed")?;
+    let (raw_message, fallback_name) = provider::call_llm_with_fallback(cfg, &system_prompt, diff)
+        .context("LLM API call failed")?;
     let mut message = prompt::clean_commit_message(&raw_message);
 
     if let Some(ref name) = fallback_name {
@@ -289,9 +300,8 @@ fn generate_final_message(
             match review_message()? {
                 ReviewAction::Accept => break candidate,
                 ReviewAction::Regenerate => {
-                    let (new_raw, fb) =
-                        provider::call_llm_with_fallback(cfg, &system_prompt, diff)
-                            .context("LLM API call failed")?;
+                    let (new_raw, fb) = provider::call_llm_with_fallback(cfg, &system_prompt, diff)
+                        .context("LLM API call failed")?;
                     message = prompt::clean_commit_message(&new_raw);
                     if let Some(ref name) = fb {
                         println!(
@@ -412,10 +422,7 @@ fn prompt_auto_update() {
         "  {}",
         "You can change this later with `cgen config`".dimmed()
     );
-    let yes = ui::confirm(
-        "Would you like to enable automatic updates for cgen?",
-        true,
-    );
+    let yes = ui::confirm("Would you like to enable automatic updates for cgen?", true);
     if let Err(e) = config::save_auto_update_preference(yes) {
         eprintln!(
             "{} Failed to save auto-update preference: {}",
@@ -424,11 +431,7 @@ fn prompt_auto_update() {
         );
     } else {
         let status = if yes { "enabled" } else { "disabled" };
-        println!(
-            "{} Auto-updates {}.\n",
-            "done!".green().bold(),
-            status
-        );
+        println!("{} Auto-updates {}.\n", "done!".green().bold(), status);
     }
 }
 
@@ -454,11 +457,7 @@ fn check_for_updates(cfg: Option<&config::AppConfig>) -> Option<String> {
             version_check.latest.green(),
         );
         if let Err(e) = update::run_update() {
-            eprintln!(
-                "{} Auto-update failed: {}",
-                "warning:".yellow().bold(),
-                e
-            );
+            eprintln!("{} Auto-update failed: {}", "warning:".yellow().bold(), e);
             return Some(version_check.latest);
         }
         println!(

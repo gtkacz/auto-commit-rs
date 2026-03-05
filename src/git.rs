@@ -559,7 +559,10 @@ mod tests {
     fn test_parse_semver_tag_invalid_format_two_parts() {
         let result = parse_semver_tag("1.2");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not valid semantic"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("not valid semantic"));
     }
 
     #[test]

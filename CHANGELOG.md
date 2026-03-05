@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -
 
+## [1.2.2] - 2026-03-05
+
+### Fixed
+
+- Fixed prompt issue where smaller LLMs weren't grasping single-line commits
+
 ## [1.2.1] - 2026-03-02
 
 

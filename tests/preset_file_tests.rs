@@ -1,9 +1,9 @@
 mod common;
 
 use auto_commit_rs::preset::{
-    create_preset, delete_preset, duplicate_preset, export_presets, find_duplicate,
-    import_presets, load_presets, rename_preset, save_presets, FallbackConfig, LlmPresetFields,
-    Preset, PresetsFile,
+    create_preset, delete_preset, duplicate_preset, export_presets, find_duplicate, import_presets,
+    load_presets, rename_preset, save_presets, FallbackConfig, LlmPresetFields, Preset,
+    PresetsFile,
 };
 use common::EnvGuard;
 use serial_test::serial;
@@ -14,10 +14,7 @@ fn setup_presets_env() -> (TempDir, EnvGuard) {
     let cfg_dir = TempDir::new().expect("tempdir");
     let cgen_dir = cfg_dir.path().join("cgen");
     fs::create_dir_all(&cgen_dir).expect("create cgen dir");
-    let env = EnvGuard::set(&[(
-        "ACR_CONFIG_HOME",
-        cfg_dir.path().to_string_lossy().as_ref(),
-    )]);
+    let env = EnvGuard::set(&[("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref())]);
     (cfg_dir, env)
 }
 
@@ -165,7 +162,11 @@ fn delete_preset_nonexistent_id() {
 
     delete_preset(&mut file, 999);
 
-    assert_eq!(file.presets.len(), initial_len, "should not delete anything");
+    assert_eq!(
+        file.presets.len(),
+        initial_len,
+        "should not delete anything"
+    );
 }
 
 #[test]

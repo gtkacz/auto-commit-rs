@@ -132,7 +132,11 @@ pub fn interactive_config(global: bool) -> Result<()> {
             let has_subgroups = !group.subgroups.is_empty();
             for (i, (display_name, suffix, val)) in group.fields.iter().enumerate() {
                 let is_last = !has_subgroups && i == group.fields.len() - 1;
-                let conn = if is_last { "\u{2514}\u{2500}\u{2500}" } else { "\u{251C}\u{2500}\u{2500}" };
+                let conn = if is_last {
+                    "\u{2514}\u{2500}\u{2500}"
+                } else {
+                    "\u{251C}\u{2500}\u{2500}"
+                };
                 let mut field_label = format!("  {} {:<22} {}", conn, display_name, val.dimmed());
                 if show_descriptions {
                     let desc = crate::config::field_description(suffix);
@@ -148,8 +152,17 @@ pub fn interactive_config(global: bool) -> Result<()> {
                 let is_last_sg = sg_idx == group.subgroups.len() - 1;
                 let sg_open = expanded.contains(sg.name);
                 let sg_arrow = if sg_open { "\u{25BC}" } else { "\u{25B6}" };
-                let sg_conn = if is_last_sg { "\u{2514}\u{2500}\u{2500}" } else { "\u{251C}\u{2500}\u{2500}" };
-                labels.push(format!("  {} {} {}", sg_conn, sg_arrow, sg.name.bright_cyan().bold()));
+                let sg_conn = if is_last_sg {
+                    "\u{2514}\u{2500}\u{2500}"
+                } else {
+                    "\u{251C}\u{2500}\u{2500}"
+                };
+                labels.push(format!(
+                    "  {} {} {}",
+                    sg_conn,
+                    sg_arrow,
+                    sg.name.bright_cyan().bold()
+                ));
                 actions.push(MenuAction::ToggleSubgroup(sg.name));
 
                 if !sg_open {
@@ -159,10 +172,17 @@ pub fn interactive_config(global: bool) -> Result<()> {
                 let pipe = if is_last_sg { " " } else { "\u{2502}" };
                 for (f_idx, (display_name, suffix, val)) in sg.fields.iter().enumerate() {
                     let is_last_field = f_idx == sg.fields.len() - 1;
-                    let f_conn = if is_last_field { "\u{2514}\u{2500}\u{2500}" } else { "\u{251C}\u{2500}\u{2500}" };
+                    let f_conn = if is_last_field {
+                        "\u{2514}\u{2500}\u{2500}"
+                    } else {
+                        "\u{251C}\u{2500}\u{2500}"
+                    };
                     let mut field_label = format!(
                         "  {}   {} {:<22} {}",
-                        pipe, f_conn, display_name, val.dimmed()
+                        pipe,
+                        f_conn,
+                        display_name,
+                        val.dimmed()
                     );
                     if show_descriptions {
                         let desc = crate::config::field_description(suffix);
@@ -211,14 +231,15 @@ pub fn interactive_config(global: bool) -> Result<()> {
         actions.push(MenuAction::Search);
 
         // Resolve starting cursor position from previous toggle target
-        let starting_cursor = cursor_target
-            .and_then(|target| {
-                actions.iter().position(|a| matches!(
+        let starting_cursor =
+            cursor_target
+                .and_then(|target| {
+                    actions.iter().position(|a| matches!(
                     a,
                     MenuAction::ToggleGroup(n) | MenuAction::ToggleSubgroup(n) if *n == target
                 ))
-            })
-            .unwrap_or(0);
+                })
+                .unwrap_or(0);
         cursor_target = None;
 
         let mut all_labels = labels.clone();
@@ -318,16 +339,14 @@ pub fn interactive_config(global: bool) -> Result<()> {
             MenuAction::SaveAsPreset => {
                 let _ = crate::preset::save_current_as_preset(&cfg);
             }
-            MenuAction::LoadPreset => {
-                match crate::preset::select_and_load_preset(&mut cfg) {
-                    Ok(Some((id, snapshot))) => {
-                        loaded_preset_id = Some(id);
-                        loaded_preset_snapshot = Some(snapshot);
-                    }
-                    Ok(None) => {}
-                    Err(e) => println!("  {} {}", "error:".red().bold(), e),
+            MenuAction::LoadPreset => match crate::preset::select_and_load_preset(&mut cfg) {
+                Ok(Some((id, snapshot))) => {
+                    loaded_preset_id = Some(id);
+                    loaded_preset_snapshot = Some(snapshot);
                 }
-            }
+                Ok(None) => {}
+                Err(e) => println!("  {} {}", "error:".red().bold(), e),
+            },
             MenuAction::ManagePresets => {
                 let _ = crate::preset::interactive_presets();
             }
@@ -347,17 +366,19 @@ pub fn interactive_config(global: bool) -> Result<()> {
                         // Search all fields across all groups and auto-expand matching groups
                         let groups = cfg.grouped_fields();
                         for group in &groups {
-                            let group_has_match = group.fields.iter().any(|(name, _, _)| {
-                                name.to_lowercase().contains(&query_lower)
-                            });
+                            let group_has_match = group
+                                .fields
+                                .iter()
+                                .any(|(name, _, _)| name.to_lowercase().contains(&query_lower));
                             if group_has_match {
                                 expanded.insert(group.name);
                             }
 
                             for sg in &group.subgroups {
-                                let sg_has_match = sg.fields.iter().any(|(name, _, _)| {
-                                    name.to_lowercase().contains(&query_lower)
-                                });
+                                let sg_has_match = sg
+                                    .fields
+                                    .iter()
+                                    .any(|(name, _, _)| name.to_lowercase().contains(&query_lower));
                                 if sg_has_match {
                                     expanded.insert(group.name);
                                     expanded.insert(sg.name);

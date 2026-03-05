@@ -12,10 +12,7 @@ fn setup_cache_env() -> (TempDir, EnvGuard) {
     let cfg_dir = TempDir::new().expect("tempdir");
     let cgen_dir = cfg_dir.path().join("cgen");
     fs::create_dir_all(&cgen_dir).expect("create cgen dir");
-    let env = EnvGuard::set(&[(
-        "ACR_CONFIG_HOME",
-        cfg_dir.path().to_string_lossy().as_ref(),
-    )]);
+    let env = EnvGuard::set(&[("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref())]);
     (cfg_dir, env)
 }
 
@@ -85,7 +82,11 @@ fn record_commit_different_repos() {
     record_commit(&repo2.path().to_string_lossy(), &h2, "repo2").expect("record repo2");
 
     // Verify index has two entries
-    let index_path = _cfg_dir.path().join("cgen").join("cache").join("index.toml");
+    let index_path = _cfg_dir
+        .path()
+        .join("cgen")
+        .join("cache")
+        .join("index.toml");
     let content = fs::read_to_string(&index_path).expect("read index");
     let index: CacheIndex = toml::from_str(&content).expect("parse index");
 

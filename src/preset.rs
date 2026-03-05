@@ -117,19 +117,11 @@ pub fn find_duplicate(file: &PresetsFile, fields: &LlmPresetFields) -> Option<u3
         .map(|p| p.id)
 }
 
-pub fn create_preset(
-    file: &mut PresetsFile,
-    name: Option<String>,
-    fields: LlmPresetFields,
-) -> u32 {
+pub fn create_preset(file: &mut PresetsFile, name: Option<String>, fields: LlmPresetFields) -> u32 {
     let id = file.next_id;
     file.next_id += 1;
     let name = name.unwrap_or_else(|| format!("{}/{}", fields.provider, fields.model));
-    file.presets.push(Preset {
-        id,
-        name,
-        fields,
-    });
+    file.presets.push(Preset { id, name, fields });
     id
 }
 
@@ -276,8 +268,7 @@ pub fn interactive_presets() -> Result<()> {
                 println!("  {} Created preset [{}]", "done!".green().bold(), id);
             }
             "Manage existing preset..." => {
-                let options: Vec<String> =
-                    file.presets.iter().map(preset_display).collect();
+                let options: Vec<String> = file.presets.iter().map(preset_display).collect();
                 let Ok(choice) = Select::new("Select preset:", options.clone()).prompt() else {
                     continue;
                 };
@@ -300,11 +291,7 @@ pub fn interactive_presets() -> Result<()> {
                     "Duplicate" => {
                         let new_id = duplicate_preset(&mut file, selected_id)?;
                         save_presets(&file)?;
-                        println!(
-                            "  {} Duplicated as [{}]",
-                            "done!".green().bold(),
-                            new_id
-                        );
+                        println!("  {} Duplicated as [{}]", "done!".green().bold(), new_id);
                     }
                     "Delete" => {
                         let confirm = ui::confirm("Delete this preset?", false);
@@ -344,11 +331,7 @@ pub fn interactive_presets() -> Result<()> {
                 match import_presets(&mut file, &data) {
                     Ok(count) => {
                         save_presets(&file)?;
-                        println!(
-                            "  {} Imported {} preset(s)",
-                            "done!".green().bold(),
-                            count
-                        );
+                        println!("  {} Imported {} preset(s)", "done!".green().bold(), count);
                     }
                     Err(e) => println!("  {} {}", "error:".red().bold(), e),
                 }
@@ -430,8 +413,7 @@ pub fn interactive_fallback_order() -> Result<()> {
                         format!("[{}] {}", id, name)
                     })
                     .collect();
-                if let Ok(choice) =
-                    Select::new("Select entry to remove:", options.clone()).prompt()
+                if let Ok(choice) = Select::new("Select entry to remove:", options.clone()).prompt()
                 {
                     let idx = options.iter().position(|o| o == &choice).unwrap();
                     file.fallback.order.remove(idx);
