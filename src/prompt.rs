@@ -70,3 +70,73 @@ pub fn build_system_prompt(cfg: &AppConfig) -> String {
 
     parts.join("\n\n")
 }
+
+/// Strip common LLM artifacts from the raw response so only the commit message remains.
+///
+/// Handles:
+/// - Markdown code fences (``` or ```commit / ```text / etc.)
+/// - Leading label lines ("Here is your commit message:", "Commit message:", etc.)
+/// - Surrounding quotation marks
+pub fn clean_commit_message(raw: &str) -> String {
+    let s = raw.trim();
+
+    // Strip markdown code fences
+    let s = strip_code_fence(s);
+
+    // Strip a leading label line (everything before the first blank line or
+    // the first line that looks like a conventional commit / gitmoji prefix).
+    let s = strip_label_prefix(s);
+
+    // Strip surrounding straight or curly quotes
+    let s = strip_surrounding_quotes(s);
+
+    s.trim().to_string()
+}
+
+fn strip_code_fence(s: &str) -> &str {
+    // Match opening fence with optional language tag (e.g., ```commit, ```text)
+    if let Some(inner) = s.strip_prefix("```") {
+        // Skip the language tag on the first line
+        let after_tag = inner.trim_start_matches(|c: char| c.is_alphanumeric() || c == '-');
+        // Must start with a newline after the tag
+        if let Some(body) = after_tag.strip_prefix('\n') {
+            if let Some(end) = body.rfind("```") {
+                return body[..end].trim();
+            }
+        }
+    }
+    s
+}
+
+fn strip_label_prefix(s: &str) -> &str {
+    // Common prefixes LLMs put before the actual message
+    let label_patterns: &[&str] = &[
+        "commit message:",
+        "here is the commit message:",
+        "here's the commit message:",
+        "here is your commit message:",
+        "here's your commit message:",
+        "generated commit message:",
+        "suggested commit message:",
+        "the commit message:",
+    ];
+
+    let lower = s.to_lowercase();
+    for pat in label_patterns {
+        if let Some(rest) = lower.strip_prefix(pat) {
+            // Trim blank lines / whitespace after the label
+            return s[pat.len()..][rest.len() - rest.trim_start().len()..].trim_start();
+        }
+    }
+    s
+}
+
+fn strip_surrounding_quotes(s: &str) -> &str {
+    let quote_pairs: &[(char, char)] = &[('"', '"'), ('\'', '\''), ('\u{201c}', '\u{201d}')];
+    for &(open, close) in quote_pairs {
+        if s.starts_with(open) && s.ends_with(close) && s.len() > 1 {
+            return &s[open.len_utf8()..s.len() - close.len_utf8()];
+        }
+    }
+    s
+}

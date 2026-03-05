@@ -32,3 +32,4 @@ target
 .mcp.json
 .python-version
 lcov.info
+.env

@@ -1,5 +1,5 @@
 use auto_commit_rs::config::AppConfig;
-use auto_commit_rs::prompt::build_system_prompt;
+use auto_commit_rs::prompt::{build_system_prompt, clean_commit_message};
 
 #[test]
 fn prompt_includes_core_sections_by_default() {
@@ -59,4 +59,43 @@ fn prompt_uses_custom_base_prompt() {
 
     let prompt = build_system_prompt(&cfg);
     assert!(prompt.starts_with("custom base prompt"));
+}
+
+#[test]
+fn clean_message_strips_markdown_code_fence() {
+    let raw = "```\nfeat: add login\n```";
+    assert_eq!(clean_commit_message(raw), "feat: add login");
+}
+
+#[test]
+fn clean_message_strips_code_fence_with_language_tag() {
+    let raw = "```commit\nfix(auth): correct redirect\n```";
+    assert_eq!(clean_commit_message(raw), "fix(auth): correct redirect");
+}
+
+#[test]
+fn clean_message_strips_label_prefix() {
+    let raw = "Here's your commit message:\nfeat: implement dark mode";
+    assert_eq!(clean_commit_message(raw), "feat: implement dark mode");
+}
+
+#[test]
+fn clean_message_strips_surrounding_quotes() {
+    let raw = "\"feat: add user authentication\"";
+    assert_eq!(clean_commit_message(raw), "feat: add user authentication");
+}
+
+#[test]
+fn clean_message_passes_through_clean_input() {
+    let raw = "feat(api): improve response time";
+    assert_eq!(clean_commit_message(raw), raw);
+}
+
+#[test]
+fn clean_message_handles_multiline_with_fence() {
+    let raw = "```\nfeat: add search\n\nAdds full-text search support.\n```";
+    assert_eq!(
+        clean_commit_message(raw),
+        "feat: add search\n\nAdds full-text search support."
+    );
 }

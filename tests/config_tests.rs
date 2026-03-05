@@ -47,6 +47,8 @@ fn load_uses_defaults_when_no_layers_exist() {
     let _acr = EnvGuard::clear(&acr_env_keys());
 
     let _force = EnvGuard::set(&[
+        // Re-set after _acr cleared it so global_config_path() stays isolated
+        ("ACR_CONFIG_HOME", cfg_dir.path().to_string_lossy().as_ref()),
         ("ACR_PROVIDER", "groq"),
         ("ACR_MODEL", "llama-3.3-70b-versatile"),
         ("ACR_LOCALE", "en"),

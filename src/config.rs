@@ -18,8 +18,7 @@ const DEFAULT_SYSTEM_PROMPT: &str = "You are to act as an author of a commit mes
 Your mission is to create clean and comprehensive commit messages as per
 the Conventional Commit specification and explain WHAT were the changes and mainly WHY the changes were done.
 I'll send you an output of 'git diff --staged' command, and you are to convert
-it into a commit message. Use the present tense.
-Lines must not be longer than 80 characters. Use english for the commit message.";
+it into a commit message. Use the present tense. Use english for the commit message.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {

@@ -257,9 +257,10 @@ fn generate_final_message(
         println!("\n{}", "LLM system prompt:".cyan().bold());
         println!("{system_prompt}\n");
     }
-    let (mut message, fallback_name) =
+    let (raw_message, fallback_name) =
         provider::call_llm_with_fallback(cfg, &system_prompt, diff)
             .context("LLM API call failed")?;
+    let mut message = prompt::clean_commit_message(&raw_message);
 
     if let Some(ref name) = fallback_name {
         println!(
@@ -273,7 +274,11 @@ fn generate_final_message(
 
     let final_msg = if cfg.review_commit {
         loop {
-            let candidate = cfg.commit_template.replace("$msg", message.trim());
+            let candidate = cfg
+                .commit_template
+                .replace("$msg", message.trim())
+                .trim()
+                .to_string();
 
             if time_to_ready.is_none() {
                 time_to_ready = Some(gen_start.elapsed());
@@ -284,10 +289,10 @@ fn generate_final_message(
             match review_message()? {
                 ReviewAction::Accept => break candidate,
                 ReviewAction::Regenerate => {
-                    let (new_msg, fb) =
+                    let (new_raw, fb) =
                         provider::call_llm_with_fallback(cfg, &system_prompt, diff)
                             .context("LLM API call failed")?;
-                    message = new_msg;
+                    message = prompt::clean_commit_message(&new_raw);
                     if let Some(ref name) = fb {
                         println!(
                             "  {} Used fallback preset: {}",
@@ -307,7 +312,11 @@ fn generate_final_message(
             }
         }
     } else {
-        let final_msg = cfg.commit_template.replace("$msg", message.trim());
+        let final_msg = cfg
+            .commit_template
+            .replace("$msg", message.trim())
+            .trim()
+            .to_string();
         time_to_ready = Some(gen_start.elapsed());
         println!("\n{} {}", "Commit message:".green().bold(), final_msg);
         final_msg
